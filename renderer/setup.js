@@ -5,6 +5,10 @@ const q = new URLSearchParams(location.search);
 const TOKEN = q.get('t') || '';
 let step = Math.min(4, Math.max(1, Number(q.get('step')) || 1));
 let info = null;
+let replay = false; // 처음 설정을 끝낸 뒤 튜토리얼을 다시 보는 중
+const EMBED = q.get('embed') === '1'; // 작업실 앱 안 팝업으로 열렸을 때
+if (EMBED) document.body.classList.add('embed');
+const closeEmbed = () => parent.postMessage({ type: 'setup-close' }, location.origin);
 
 const api = (path, body) =>
   fetch(path, {
@@ -14,24 +18,27 @@ const api = (path, body) =>
   }).then((r) => r.json());
 
 const SRC = [
-  { key: 'orca', name: 'Orca', badge: 'O', color: '#2A4A6B', desc: 'Orca에서 띄운 Claude·Codex 에이전트' },
-  { key: 'claude', name: 'Claude', badge: 'C', color: '#C15F3C', desc: '터미널 claude, Claude 데스크톱 Code 탭, VS Code' },
-  { key: 'codex', name: 'Codex', badge: 'X', color: '#2A2F36', desc: 'Codex CLI, Codex 앱, VS Code' },
+  { key: 'orca', name: 'Orca', badge: 'O', color: '#2A4A6B', desc: 'Orca에서 띄운 Claude, Codex' },
+  { key: 'claude', name: 'Claude', badge: 'C', color: '#C15F3C', desc: '터미널, Claude 앱 Code 탭, VS Code' },
+  { key: 'codex', name: 'Codex', badge: 'X', color: '#2A2F36', desc: 'Codex 앱, 터미널, VS Code' },
 ];
+let icons = {}; // 이 Mac에 깔린 앱의 진짜 아이콘 (없으면 글자 배지)
 
+// 상태: 짧은 표시(pill)와 한 줄 설명(detail)
 function statusOf(key) {
   const d = info.detect[key] || {};
   const on = info.settings.sources[key] !== false;
   if (key === 'orca') {
-    if (!d.installed) return { cls: 'off', text: 'Orca가 설치돼 있지 않아요', available: false };
-    if (!on) return { cls: 'off', text: '꺼 둠', available: true };
-    if (d.ok) return { cls: 'ok', text: `연결됨 · 에이전트 ${d.agents}개${d.working ? ` · 지금 ${d.working}개 일하는 중` : ''}`, available: true };
-    return { cls: 'warn', text: 'Orca를 켜면 연결돼요', available: true, title: d.error || '' };
+    if (!d.installed) return { cls: 'off', pill: '설치 안 됨', detail: 'Orca가 이 Mac에 없어요', available: false };
+    if (!on) return { cls: 'off', pill: '꺼 둠', detail: '켜면 보고를 받아요', available: true };
+    if (d.ok) return { cls: 'ok', pill: '연결됨', detail: `에이전트 ${d.agents}명${d.working ? `, 지금 ${d.working}명 일하는 중` : ''}`, available: true };
+    return { cls: 'warn', pill: '기다리는 중', detail: 'Orca를 켜면 연결돼요', available: true, title: d.error || '' };
   }
-  if (!d.found) return { cls: 'off', text: `${key === 'claude' ? 'Claude' : 'Codex'} 기록이 없어요`, available: false };
-  if (!on) return { cls: 'off', text: '꺼 둠', available: true };
-  if (d.recent) return { cls: 'ok', text: `찾았어요 · 최근 7일 세션 ${d.recent}개`, available: true };
-  return { cls: 'warn', text: '찾았어요 · 최근 7일엔 쓴 기록이 없어요', available: true };
+  const nm = key === 'claude' ? 'Claude' : 'Codex';
+  if (!d.found) return { cls: 'off', pill: '기록 없음', detail: `${nm}를 쓴 기록이 아직 없어요`, available: false };
+  if (!on) return { cls: 'off', pill: '꺼 둠', detail: '켜면 보고를 받아요', available: true };
+  if (d.recent) return { cls: 'ok', pill: '찾았어요', detail: `최근 7일 동안 ${d.recent}번 썼어요`, available: true };
+  return { cls: 'warn', pill: '찾았어요', detail: '최근 7일엔 쓴 기록이 없어요', available: true };
 }
 
 function renderSources() {
@@ -41,17 +48,17 @@ function renderSources() {
     const on = info.settings.sources[s.key] !== false && st.available;
     const d = info.detect[s.key] || {};
     const chips = (d.apps || []).map((a) => `<span>${esc(a.name)}<em>${a.n}</em></span>`).join('');
-    const where = s.key === 'orca' ? '' : d.dir ? `<span>${esc(d.dir)}</span>` : '';
-    return `<div class="src${on ? ' on' : ''}${st.available ? '' : ' na'}">
-      <div class="sbadge" style="background:${s.color}">${s.badge}</div>
+    const icon = icons[s.key];
+    return `<div class="src${on ? ' on' : ''}${st.available ? '' : ' na'}" title="${esc(d.dir || '')}">
+      ${icon ? `<div class="sbadge img"><img src="${esc(icon)}" alt=""></div>` : `<div class="sbadge" style="background:${s.color}">${s.badge}</div>`}
       <div class="smain"><b>${s.name}</b><span class="sdesc">${esc(s.desc)}</span>
-        <span class="spill ${st.cls}" title="${esc(st.title || '')}">${esc(st.text)}</span>
-        ${chips || where ? `<div class="chips">${chips}${where}</div>` : ''}</div>
+        <span class="sstat"><span class="spill ${st.cls}" title="${esc(st.title || '')}">${esc(st.pill)}</span>${esc(st.detail)}</span>
+        ${chips ? `<div class="chips">${chips}</div>` : ''}</div>
       <span class="switch"><input type="checkbox" data-src="${s.key}" ${on ? 'checked' : ''} ${st.available ? '' : 'disabled'} aria-label="${s.name} 연동"><i></i></span>
     </div>`;
   }).join('');
   const t = new Date();
-  $('scanAt').textContent = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}에 찾았어요`;
+  $('scanAt').textContent = `${t.getHours()}시 ${String(t.getMinutes()).padStart(2, '0')}분에 찾았어요`;
 }
 
 function renderMaps() {
@@ -77,35 +84,53 @@ function renderOptions() {
 }
 
 function show(n) {
+  if (step === 1 && n !== 1) saveName(); // 이름 칸을 떠날 때 저장
   step = n;
-  for (const p of document.querySelectorAll('.spage')) p.hidden = Number(p.dataset.step) !== n;
+  for (const p of document.querySelectorAll('.spage')) {
+    p.hidden = Number(p.dataset.step) !== n;
+    if (!p.hidden) p.scrollTop = 0; // 단계를 바꾸면 맨 위부터
+  }
   for (const li of document.querySelectorAll('#steps li')) {
     const k = Number(li.dataset.n);
     li.classList.toggle('on', k === n);
     li.classList.toggle('done', k < n);
   }
   $('prev').hidden = n === 1;
-  $('next').textContent = n === 4 ? '시작하기' : '다음';
+  $('next').textContent = n === 4 ? (replay ? '완료' : '시작하기') : '다음';
   if (n === 1) setTimeout(() => $('bossName').focus(), 50);
 }
 
 async function saveName() {
-  const v = $('bossName').value.trim();
-  await api('/api/settings', { bossName: v || '나' });
+  if (!info) return; // 설정을 읽기 전에는 저장하지 않는다 (지금 이름을 빈 값으로 덮지 않게)
+  const v = $('bossName').value.trim() || '나';
+  if (v === info.settings.bossName) return;
+  info.settings.bossName = v;
+  await api('/api/settings', { bossName: v });
 }
 
 async function finish() {
   await saveName();
+  if (EMBED) return closeEmbed();
   await api('/api/setup-done', {});
   // 브라우저로 열었을 때는 바로 작업실로
   setTimeout(() => (location.href = `/?t=${TOKEN}`), 400);
 }
 
-$('next').onclick = async () => {
-  if (step === 1) await saveName();
+$('next').onclick = () => {
   if (step < 4) show(step + 1);
   else finish();
 };
+// 위의 단계 표시를 눌러서 원하는 단계로 바로 간다
+for (const li of document.querySelectorAll('#steps li')) {
+  li.tabIndex = 0;
+  li.setAttribute('role', 'button');
+  li.addEventListener('click', () => show(Number(li.dataset.n)));
+  li.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    show(Number(li.dataset.n));
+  });
+}
 $('prev').onclick = () => show(Math.max(1, step - 1));
 $('skip').onclick = finish;
 $('tryDemo').onclick = async () => {
@@ -138,17 +163,24 @@ $('bossName').addEventListener('keydown', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target === document.body) $('next').click();
+  if (e.key === 'Escape' && EMBED) closeEmbed();
 });
 
 async function load() {
   try {
-    info = await api('/api/setup');
+    [info, icons] = await Promise.all([api('/api/setup'), api('/api/app-icons').catch(() => ({}))]);
   } catch {
     $('srcs').innerHTML = '<div class="sloading">작업실 서버와 연결하지 못했어요.</div>';
     return;
   }
   renderSources();
   renderOptions();
+  replay = !!info.settings.setupDone;
+  if (replay) {
+    document.title = '에이전트 작업실 튜토리얼';
+    $('skip').textContent = '닫기';
+    if (step === 4) $('next').textContent = '완료';
+  }
 }
 show(step);
 load();

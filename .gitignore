@@ -3,3 +3,4 @@ dist/
 shared/three-addons/
 build/icon.iconset/
 .DS_Store
+build/icon-*.png

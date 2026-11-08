@@ -33,6 +33,22 @@ const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 
 let laptopScreenTex = null;
 let stickerTex = null;
+let jerseyTex = null; // 축구 유니폼 등번호 7
+function numberTex() {
+  if (!jerseyTex)
+    jerseyTex = canvasTex(128, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.font = '800 116px "Pretendard Variable", sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 10;
+      g.strokeStyle = 'rgba(0, 0, 0, .16)';
+      g.strokeText('7', w / 2, h / 2 + 6);
+      g.fillStyle = '#FAFAF7';
+      g.fillText('7', w / 2, h / 2 + 6);
+    });
+  return jerseyTex;
+}
 function sharedTextures() {
   if (!laptopScreenTex) laptopScreenTex = codeScreenTexture(77, 192, 128);
   if (!stickerTex)
@@ -196,7 +212,7 @@ function drawFace(g, expr, mode) {
 }
 
 // 동작 길이(초)
-export const EMOTE_DUR = { wave: 1.7, heart: 1.8, sip: 1.5, boom: 0.9 };
+export const EMOTE_DUR = { wave: 1.7, heart: 1.8, sip: 1.5, boom: 0.9, salute: 1.8 };
 
 export class Avatar {
   constructor(look, { shadow = true } = {}) {
@@ -433,6 +449,12 @@ export class Avatar {
       add(H, new THREE.SphereGeometry(0.327, 32, 16, 0, PI * 2, 0, 1.49), hairM);
       add(H, new THREE.TorusGeometry(0.327 * Math.sin(1.49), 0.012, 6, 40), hairM, [0, 0.327 * Math.cos(1.49), 0], [PI / 2, 0, 0]);
     }
+    if (L.hair === 'quiff') {
+      // 올림머리: 짧은 머리에 앞머리를 위로 세운다
+      cap();
+      add(H, new THREE.SphereGeometry(0.1, 20, 14), hairM, [0, 0.25, 0.15], [-0.55, 0, 0], [1.55, 0.78, 1.15]);
+      add(H, new THREE.SphereGeometry(0.07, 16, 12), hairM, [0.05, 0.31, 0.08], [-0.4, 0, 0.2], [1.3, 0.7, 1.1]);
+    }
     if (L.hair === 'curly') {
       cap();
       for (let i = 0; i < 14; i++) {
@@ -547,6 +569,15 @@ export class Avatar {
       patch.castShadow = false;
       add(B, new THREE.TorusGeometry(0.168, 0.022, 6, 28), acc, [0, 0.14, 0], [PI / 2, 0, 0]);
       add(B, new THREE.CylinderGeometry(0.008, 0.008, 0.36, 6), M('#FAFAF7'), [0, 0.36, 0.172]);
+    }
+
+    if (L.top === 'jersey') {
+      // 축구 유니폼: 등번호와 가슴 번호(몸통 곡면을 따라 붙인다), 둥근 깃
+      const num = new THREE.MeshStandardMaterial({ map: numberTex(), transparent: true, alphaTest: 0.35, roughness: 0.85 });
+      const back = add(B, new THREE.CylinderGeometry(0.194, 0.194, 0.17, 18, 1, true, PI - 0.46, 0.92), num, [0, 0.37, 0], [0, 0, 0], [1, 1, 0.9]);
+      const front = add(B, new THREE.CylinderGeometry(0.193, 0.193, 0.075, 10, 1, true, 0.22, 0.42), num, [0, 0.405, 0], [0, 0, 0], [1, 1, 0.9]);
+      back.castShadow = front.castShadow = false;
+      add(B, new THREE.TorusGeometry(0.1, 0.018, 8, 28), M(L.accent), [0, 0.6, 0], [PI / 2, 0, 0]);
     }
 
     // 목
@@ -694,6 +725,11 @@ export class Avatar {
       show.gun = true;
       T.aAx = -1.45 + (s.kick || 0) * 0.6;
       T.aAz = 0.05;
+    } else if (act === 'coffee') {
+      // 커피를 들고 걷는다 (과장부터 보고하러 올 때)
+      show.cup = true;
+      T.aAx = -1.15;
+      T.aAz = 0.28;
     }
 
     // 잠깐 하는 표현
@@ -716,6 +752,14 @@ export class Avatar {
         T.aAz = 0.5;
         T.headRX = -0.18;
         if (s.st !== 2) face = k > 0.4 && k < 1.1 ? 'blink' : 'normal';
+      } else if (s.emote === 'salute') {
+        // 경례 (부장부터 보고할 때): 오른손 끝을 이마에 붙이고 반듯하게
+        T.aBx = -0.95;
+        T.aBz = 2.08;
+        T.aAx = 0.05;
+        T.aAz = 0.04;
+        T.headRX = -0.06;
+        face = 'normal';
       } else if (s.emote === 'boom') {
         T.aAz = -2.6;
         T.aBz = 2.6;

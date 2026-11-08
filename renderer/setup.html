@@ -12,72 +12,80 @@
 <script type="module" src="/app/setup.js"></script>
 </head>
 <body class="setup">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-work" viewBox="0 0 20 20"><rect x="3.2" y="3.6" width="13.6" height="9.4" rx="2" fill="currentColor" fill-opacity=".16"/><path d="M1.6 16.2h16.8M7 6.8l2 1.6-2 1.6M10.8 10h2.4"/></symbol>
+  <symbol id="i-report" viewBox="0 0 20 20"><path d="M7.2 2.8h5.6a5 5 0 0 1 5 5v1.6a5 5 0 0 1-5 5H7.8l-3 2.8v-3.2a5 5 0 0 1-2.6-4.4V7.8a5 5 0 0 1 5-5z" fill="currentColor" fill-opacity=".16"/><path d="M6.8 8.6l2.2 2.2 4.2-4.3"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 20 20"><path d="M2.6 11.4l2.1-6.1A1.6 1.6 0 0 1 6.2 4.2h7.6a1.6 1.6 0 0 1 1.5 1.1l2.1 6.1v3.4a1.6 1.6 0 0 1-1.6 1.6H4.2a1.6 1.6 0 0 1-1.6-1.6z" fill="currentColor" fill-opacity=".16"/><path d="M2.6 11.4h4.1l1.1 2.1h4.4l1.1-2.1h4.1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 20 20"><path d="M5 13.6V9.2a5 5 0 0 1 10 0v4.4l1.6 1.6H3.4z" fill="currentColor" fill-opacity=".16"/><path d="M8.2 17.4a2.1 2.1 0 0 0 3.6 0"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 20 20"><path d="M3.4 7.6h3l4-3.4v11.6l-4-3.4h-3z" fill="currentColor" fill-opacity=".16"/><path d="M13.6 7.4a3.6 3.6 0 0 1 0 5.2M15.8 5.4a6.4 6.4 0 0 1 0 9.2"/></symbol>
+  <symbol id="i-rest" viewBox="0 0 20 20"><path d="M17.5 10.7A7.5 7.5 0 1 1 9.3 2.5a5.8 5.8 0 0 0 8.2 8.2z" fill="currentColor" fill-opacity=".16"/><path d="M12.6 2.6h3.4l-3.4 3.6h3.4" stroke-width="1.5"/></symbol>
+  <symbol id="i-power" viewBox="0 0 20 20"><circle cx="10" cy="10.6" r="6.6" fill="currentColor" fill-opacity=".16" stroke="none"/><path d="M10 2.8v6.4M6.2 5.4a6.4 6.4 0 1 0 7.6 0"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 20 20"><rect x="4.4" y="8.8" width="11.2" height="8.6" rx="2" fill="currentColor" fill-opacity=".16"/><path d="M7 8.8V6.6a3 3 0 0 1 6 0v2.2M10 12.2v2"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 20 20"><path d="M4.4 3.4h11.2a2 2 0 0 1 2 2v6.8a2 2 0 0 1-2 2H9.2l-3.8 3v-3H4.4a2 2 0 0 1-2-2V5.4a2 2 0 0 1 2-2z" fill="currentColor" fill-opacity=".16"/><path d="M6.6 8.8h6.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 20 20"><path d="M7.4 2.8h5.2l-.9 4.6 3 2.7v1.5H5.3v-1.5l3-2.7z" fill="currentColor" fill-opacity=".16"/><path d="M10 11.6v5.6"/></symbol>
+  <symbol id="i-badge" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4" fill="currentColor" fill-opacity=".16"/><path d="M8.4 7.6l2-1.2v7.2"/></symbol>
+  <symbol id="i-click" viewBox="0 0 20 20"><rect x="5.4" y="2.8" width="9.2" height="14.4" rx="4.6" fill="currentColor" fill-opacity=".16"/><path d="M10 2.8v4.6M5.4 7.4h9.2"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 20 20"><rect x="2.4" y="3.6" width="15.2" height="12.8" rx="2.4" fill="currentColor" fill-opacity=".16"/><path d="M2.4 7.2h15.2M13.6 5.4h.1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 20 20"><path d="M15.6 8.4A6 6 0 0 0 4.8 6.6M4.4 11.6a6 6 0 0 0 10.8 1.8"/><path d="M4.4 3.4v3.4h3.4M15.6 16.6v-3.4h-3.4"/></symbol>
+</svg>
 <main class="sbox">
   <header class="shead2">
-    <svg class="slogo" viewBox="100 100 824 824" aria-hidden="true">
-      <defs><linearGradient id="lbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F6E5E"/><stop offset="1" stop-color="#173A33"/></linearGradient></defs>
-      <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#lbg)"/>
-      <rect x="300" y="610" width="240" height="190" rx="96" fill="#28366B"/>
-      <circle cx="420" cy="500" r="168" fill="#FFE6D2"/>
-      <path d="M252 486 C258 380 330 322 420 322 C512 322 586 382 590 486 C548 430 492 410 420 412 C350 410 294 430 252 486 Z" fill="#2B2422"/>
-      <ellipse cx="368" cy="522" rx="17" ry="23" fill="#2A2320"/><ellipse cx="472" cy="522" rx="17" ry="23" fill="#2A2320"/>
-      <path d="M392 580 Q420 608 448 580" stroke="#2A2320" stroke-width="11" fill="none" stroke-linecap="round"/>
-      <rect x="180" y="720" width="664" height="96" rx="30" fill="#D9B98F"/>
-      <path d="M600 214 H800 A58 58 0 0 1 858 272 V384 A58 58 0 0 1 800 442 H700 L640 500 V442 H600 A58 58 0 0 1 542 384 V272 A58 58 0 0 1 600 214 Z" fill="#FF8A3D"/>
-      <path d="M630 330 L684 384 L776 284" stroke="#fff" stroke-width="36" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <div><h1>에이전트 작업실</h1><p>Orca · Claude · Codex 에이전트가 끝나면 보고하러 와요</p></div>
+    <img class="slogo" src="/favicon.svg" alt="">
+    <div><h1>에이전트 작업실</h1><p>AI 에이전트가 일을 끝내면 와서 알려 줘요</p></div>
   </header>
 
   <ol class="ssteps" id="steps">
-    <li data-n="1"><i>1</i>환영</li>
-    <li data-n="2"><i>2</i>에이전트 연동</li>
+    <li data-n="1"><i>1</i>시작</li>
+    <li data-n="2"><i>2</i>앱 연결</li>
     <li data-n="3"><i>3</i>알림</li>
-    <li data-n="4"><i>4</i>준비 끝</li>
+    <li data-n="4"><i>4</i>사용법</li>
   </ol>
 
   <section class="spage" data-step="1">
     <h2>반가워요! 👋</h2>
-    <p>Orca, 터미널, Claude 데스크톱, Codex에서 돌린 에이전트가 3D 작업실 책상에서 일해요. 일이 끝나면 내 자리로 걸어와서 보고하고, 확인이 필요하면 자리에서 손을 들어요.</p>
+    <p class="lead">AI 에이전트에게 일을 맡겨 두세요.<br>끝나면 캐릭터가 걸어와서 알려 줘요.</p>
     <div class="flow">
-      <div><span>💻</span><b>일하는 중</b><small>책상에서 노트북을 두드려요</small></div>
-      <i>→</i>
-      <div><span>🚶</span><b>보고하러 와요</b><small>끝나면 내 자리로 와요</small></div>
-      <i>→</i>
-      <div><span>📬</span><b>보고함</b><small>알림과 함께 쌓여요</small></div>
+      <div><span class="fic work"><svg class="i" aria-hidden="true"><use href="#i-work"/></svg></span><b>일해요</b><small>책상에 앉아서 일해요</small></div>
+      <i>›</i>
+      <div><span class="fic done"><svg class="i" aria-hidden="true"><use href="#i-report"/></svg></span><b>알려 줘요</b><small>끝나면 내 자리로 와요</small></div>
+      <i>›</i>
+      <div><span class="fic inb"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg></span><b>모아 둬요</b><small>보고함에 차곡차곡</small></div>
     </div>
-    <label class="field">작업실에서 불릴 내 이름<input id="bossName" maxlength="16" placeholder="나" autocomplete="off"></label>
-    <p class="flabel">어디서 일할까요?</p>
+    <label class="field"><span>내 이름</span><input id="bossName" maxlength="16" placeholder="나" autocomplete="off"><small>작업실에서 이 이름으로 불러요</small></label>
+    <p class="flabel">일할 곳</p>
     <div class="maps" id="maps">
-      <button type="button" class="mapc" data-map="office"><span class="mart office"><i></i><i></i><i></i></span><b>작업실</b><small>큰 테이블과 창가 작업대, 소파</small></button>
-      <button type="button" class="mapc" data-map="cafe"><span class="mart cafe"><i></i><i></i><i></i></span><b>카페</b><small>벽돌 벽, 바리스타 카운터, 원형 테이블</small></button>
+      <button type="button" class="mapc" data-map="office"><span class="mart office"><i></i><i></i><i></i></span><b>작업실</b><small>큰 테이블과 소파</small></button>
+      <button type="button" class="mapc" data-map="cafe"><span class="mart cafe"><i></i><i></i><i></i></span><b>카페</b><small>창가 자리와 원형 테이블</small></button>
     </div>
   </section>
 
   <section class="spage" data-step="2" hidden>
-    <h2>에이전트 연동하기</h2>
-    <p>이 Mac에서 찾은 에이전트 앱이에요. 보고받고 싶은 것만 켜 두세요. 로그인이나 키 입력 없이, 각 앱이 이 Mac에 남기는 작업 기록만 읽어요.</p>
+    <h2>어떤 에이전트를 볼까요?</h2>
+    <p class="lead">이 Mac에서 찾은 앱이에요.<br>보고받고 싶은 앱만 켜 두세요.</p>
     <div class="srcs" id="srcs"><div class="sloading">찾는 중…</div></div>
-    <div class="srow"><button type="button" class="btn ghost sm" id="rescan">🔄 다시 찾기</button><small id="scanAt"></small></div>
-    <div class="note">ChatGPT 데스크톱과 Claude 데스크톱의 <b>일반 채팅</b>은 연동할 수 없어요. 대화가 서버에만 있거나 Mac에 암호화돼 저장돼서, 앱 밖에서는 끝났는지 알 수 없어요. Claude 데스크톱의 <b>Code 탭</b>은 위의 Claude에 들어가요.</div>
+    <div class="srow"><button type="button" class="btn ghost sm" id="rescan"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>다시 찾기</button><small id="scanAt"></small></div>
+    <ul class="notes">
+      <li><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span>로그인이나 키는 필요 없어요.<br>각 앱이 이 Mac에 남긴 작업 기록만 읽어요.</span></li>
+      <li><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg><span>ChatGPT, Claude 앱의 <b>일반 채팅</b>은 볼 수 없어요.<br>Claude 앱의 <b>Code 탭</b>은 위의 Claude로 보여요.</span></li>
+    </ul>
   </section>
 
   <section class="spage" data-step="3" hidden>
-    <h2>알림 설정</h2>
-    <p>작업실을 접어 둬도 보고는 놓치지 않게 해요.</p>
+    <h2>알림은 어떻게 받을까요?</h2>
+    <p class="lead">작업실을 닫아 둬도<br>보고는 놓치지 않아요.</p>
     <div class="opts">
-      <label class="opt"><span><b>끝나면 알림 보내기</b><small>보고가 오면 macOS 알림 센터에 떠요</small></span><span class="switch"><input type="checkbox" id="optNotify"><i></i></span></label>
-      <label class="opt"><span><b>띵동 소리</b><small>에이전트가 보고하러 오면 작은 소리를 내요</small></span><span class="switch"><input type="checkbox" id="optSound"><i></i></span></label>
-      <label class="opt"><span><b>쉬는 에이전트 숨기기</b><small>일을 끝낸 에이전트는 보고만 하고 퇴근해요</small></span><span class="switch"><input type="checkbox" id="optHide"><i></i></span></label>
-      <label class="opt" id="loginRow"><span><b>로그인할 때 자동으로 열기</b><small>Mac을 켜면 상단바에 바로 떠요</small></span><span class="switch"><input type="checkbox" id="optLogin"><i></i></span></label>
+      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span><span><b>알림 보내기</b><small>일이 끝나면 macOS 알림이 떠요</small></span><span class="switch"><input type="checkbox" id="optNotify"><i></i></span></label>
+      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-sound"/></svg></span><span><b>띵동 소리</b><small>보고하러 올 때 작은 소리가 나요</small></span><span class="switch"><input type="checkbox" id="optSound"><i></i></span></label>
+      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg></span><span><b>쉬는 에이전트 숨기기</b><small>보고만 하고 바로 퇴근해요</small></span><span class="switch"><input type="checkbox" id="optHide"><i></i></span></label>
+      <label class="opt" id="loginRow"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg></span><span><b>로그인할 때 열기</b><small>Mac을 켜면 상단바에 바로 떠요</small></span><span class="switch"><input type="checkbox" id="optLogin"><i></i></span></label>
     </div>
   </section>
 
   <section class="spage" data-step="4" hidden>
-    <h2>준비 끝! 🎉</h2>
+    <h2>이렇게 쓰면 돼요 🎉</h2>
     <div class="mbdemo" aria-hidden="true">
       <div class="mbar"><span class="mapp">파일&nbsp; 편집&nbsp; 보기</span><span class="msp"></span>
-        <span class="mtray"><svg viewBox="0 0 36 36"><defs><mask id="tm"><rect width="36" height="36" fill="#fff"/><path d="M21.6 8.6 L24.6 11.6 L30 6.2" stroke="#000" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></mask></defs><circle cx="12.5" cy="19" r="7"/><path d="M3 34 C3 28.5 7.2 26.2 12.5 26.2 C17.8 26.2 22 28.5 22 34 Z"/><path d="M21 1.5 H31.5 A3.5 3.5 0 0 1 35 5 V12.5 A3.5 3.5 0 0 1 31.5 16 H26 L22.5 19.5 V16 H21 A3.5 3.5 0 0 1 17.5 12.5 V5 A3.5 3.5 0 0 1 21 1.5 Z" mask="url(#tm)"/></svg> 2</span>
+        <span class="mtray"><svg viewBox="0 0 36 36"><path d="M13 5 H23 A9 9 0 0 1 32 14 V17 A9 9 0 0 1 23 26 H14 L8.5 31 V25.2 A9 9 0 0 1 4 17 V14 A9 9 0 0 1 13 5 Z" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="13.5" cy="15" rx="1.7" ry="2.2"/><ellipse cx="22.5" cy="15" rx="1.7" ry="2.2"/><path d="M15.6 19.4 Q18 21.6 20.4 19.4" fill="none" stroke="#111" stroke-width="1.9" stroke-linecap="round"/></svg> 2</span>
         <span class="mclock">🔋 9:41</span></div>
       <div class="mpanel">
         <div class="mph"><b>에이전트 작업실</b><span>🛠 2</span><span>✅ 5</span></div>
@@ -85,8 +93,22 @@
         <div class="mlist"><i></i><i></i></div>
       </div>
     </div>
-    <p>화면 맨 위 <b>상단바의 아이콘</b>을 누르면 작업실이 펼쳐져요. 에이전트가 일을 끝내면 아이콘 옆에 숫자가 떠요. 아이콘을 오른쪽 클릭하면 크게 보기와 이 설정 메뉴가 나와요.</p>
-    <button type="button" class="btn ghost" id="tryDemo">🧪 연습 보고 받아 보기</button>
+    <ol class="howto">
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-tray"/></svg></span><span><b>상단바 말풍선을 눌러요</b><small>작은 작업실이 펼쳐져요</small></span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-badge"/></svg></span><span><b>숫자가 뜨면 보고가 온 거예요</b><small>일이 끝날 때마다 하나씩 늘어요</small></span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></span><span><b>핀 버튼을 누르면 고정돼요</b><small>다른 곳을 눌러도 안 닫혀요</small></span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-click"/></svg></span><span><b>오른쪽 클릭하면 메뉴가 나와요</b><small>크게 보기, 설정, 튜토리얼 다시 보기</small></span></li>
+    </ol>
+    <button type="button" class="btn ghost try" id="tryDemo">🧪 연습 보고 받아 보기</button>
+    <details class="tip" id="trayTip">
+      <summary>상단바에 아이콘이 안 보이나요?</summary>
+      <p>아이콘이 많으면 새 아이콘이 노치나 메뉴 뒤로 숨을 수 있어요.</p>
+      <ol>
+        <li><b>바로 열기</b><span><kbd>⌘</kbd> <kbd>Space</kbd>를 누르고 <b>Agent Office</b>를 실행해요.<br>보고 알림을 눌러도 열려요.</span></li>
+        <li><b>자리 만들기</b><span><b>시스템 설정 → 메뉴 막대</b>에서 안 쓰는 항목을 꺼요.<br>macOS 15 이하는 <b>시스템 설정 → 제어 센터</b>예요.</span></li>
+        <li><b>자리 옮기기</b><span><kbd>⌘</kbd> 키를 누른 채 아이콘을 시계 쪽으로 끌어요.<br>다음에 켜도 그 자리에 떠요.</span></li>
+      </ol>
+    </details>
   </section>
 
   <footer class="sfoot">

@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { execFile } = require('node:child_process');
 const os = require('node:os');
 const { createWatcher } = require('./orca.js');
+const { createStaff, staffOf } = require('./staff.js');
 const { detectLocal } = require('./sources.js');
 
 // 설정: 처음 설정을 마쳤는지, 어떤 앱을 연동할지, 알림과 소리, 내 이름
@@ -19,6 +20,10 @@ const DEFAULTS = {
   sources: { orca: true, claude: true, codex: true },
   notify: true,
   sound: true,
+  miniInbox: false, // 상단바에서 펼친 작은 창의 보고함을 펼쳐 둘지
+  sentHome: {}, // 골라서 퇴근시킨 에이전트: id → 그때 쉬기 시작한 시각 (새 일을 받으면 다시 출근)
+  staff: {}, // 직원 명부: 충성도 점수 (staff.js)
+  pinPopover: false, // 작은 창을 고정해서 다른 곳을 눌러도 안 닫히게
 };
 const MAPS_OK = new Set(['office', 'cafe']);
 function loadSettings(file) {
@@ -107,6 +112,8 @@ function startServer({
   showMenu,
   openSetup,
   onSetupDone,
+  onSettings,
+  getAppIcons,
   getLoginItem,
   setLoginItem,
   fixture,
@@ -120,19 +127,31 @@ function startServer({
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     } catch {}
   };
+  if (!settings.staff || typeof settings.staff !== 'object') settings.staff = {};
+  const staff = createStaff({ get: () => settings.staff, save: () => saveSettings() });
   const watcher = createWatcher({
     fixture,
     getSettings: () => settings,
     onReport: (r, unread) => {
       if (settings.notify !== false) notify?.(r);
       badge?.(unread);
+      staff.onReport(r);
     },
     onUnread: (n) => badge?.(n),
+    onWork: (a) => staff.onWork(a),
+    onAnswered: (a, ms) => staff.onAnswered(a, ms),
   });
+  const staleTimer = setInterval(() => staff.checkStale(watcher.state.reports), 10 * 60000);
+  staleTimer.unref?.();
+  // 보고를 읽으면 (처음 읽을 때만) 충성도
+  const rewardRead = (id) => {
+    for (const r of watcher.state.reports) if (!r.read && (id === '*' || r.id === id)) staff.onRead(r);
+  };
+  const withKey = (x) => ({ ...x, staffKey: staffOf(x)?.key || null });
   // 설정 바꾸기 (화면에서도, 상단바 메뉴에서도 쓴다)
   function applySettings(body = {}) {
     if (typeof body.bossName === 'string') settings.bossName = body.bossName.trim().slice(0, 16) || '나';
-    for (const k of ['notify', 'sound', 'hideResting']) if (typeof body[k] === 'boolean') settings[k] = body[k];
+    for (const k of ['notify', 'sound', 'hideResting', 'miniInbox', 'pinPopover']) if (typeof body[k] === 'boolean') settings[k] = body[k];
     if (MAPS_OK.has(body.map)) settings.map = body.map;
     if (body.bossLook && typeof body.bossLook === 'object') {
       const look = {};
@@ -143,6 +162,7 @@ function startServer({
       for (const k of ['orca', 'claude', 'codex']) if (typeof body.sources[k] === 'boolean') settings.sources[k] = body.sources[k];
     if (typeof body.login === 'boolean') setLoginItem?.(body.login);
     saveSettings();
+    onSettings?.(settings);
     watcher.pollNow();
     return settings;
   }
@@ -171,16 +191,54 @@ function startServer({
           error: s.error,
           at: s.at,
           sources: s.sources,
-          settings: { bossName: settings.bossName, bossLook: settings.bossLook, sound: settings.sound, map: settings.map, hideResting: settings.hideResting },
-          agents: s.agents,
-          reports: s.reports,
+          settings: {
+            bossName: settings.bossName,
+            bossLook: settings.bossLook,
+            sound: settings.sound,
+            map: settings.map,
+            hideResting: settings.hideResting,
+            miniInbox: settings.miniInbox,
+            pinPopover: settings.pinPopover,
+            sentHome: settings.sentHome,
+          },
+          agents: s.agents.map(withKey),
+          reports: s.reports.map(withKey),
+          ...staff.view(),
           unread: watcher.unread(),
         });
       if (p === '/api/setup') return json(res, 200, setupInfo());
+      if (p === '/api/app-icons') return json(res, 200, (await getAppIcons?.()) || {});
       if (req.method !== 'POST') return json(res, 405, { ok: false });
       const body = await readBody(req);
       if (p === '/api/read') {
+        rewardRead(body.all ? '*' : String(body.id || ''));
         watcher.markRead(body.all ? '*' : String(body.id || ''));
+        return json(res, 200, { ok: true, unread: watcher.unread() });
+      }
+      if (p === '/api/send-home') {
+        const id = String(body.id || '').slice(0, 300);
+        const since = Number(body.since) || 0;
+        if (id) {
+          const map = { ...(settings.sentHome || {}) };
+          delete map[id];
+          if (body.back !== true) map[id] = since; // back: 다시 부르기
+          const keys = Object.keys(map);
+          for (const k of keys.slice(0, Math.max(0, keys.length - 300))) delete map[k]; // 오래된 것부터 정리
+          settings.sentHome = map;
+          saveSettings();
+        }
+        return json(res, 200, { ok: !!id });
+      }
+      // 하트, 종이 총: 화면에서 일어난 일로 충성도를 바꾼다 (하루 횟수 제한은 staff.js)
+      if (p === '/api/loyalty') {
+        const a = watcher.state.agents.find((x) => x.id === String(body.id || ''));
+        const ev = String(body.ev || '');
+        const s2 = a && (ev === 'heart' ? staff.heart(a) : ev === 'shot' ? staff.shot(a) : null);
+        return json(res, 200, { ok: !!s2 });
+      }
+      if (p === '/api/seen') {
+        if (body.seen !== false) rewardRead(body.all ? '*' : String(body.id || ''));
+        watcher.markSeen(body.all ? '*' : String(body.id || ''), body.seen !== false);
         return json(res, 200, { ok: true, unread: watcher.unread() });
       }
       if (p === '/api/demo') return json(res, 200, { ok: true, id: watcher.startDemo() });
@@ -201,7 +259,7 @@ function startServer({
         return json(res, 200, { ok: !!openSetup });
       }
       if (p === '/api/open-window') {
-        openWindow?.();
+        openWindow?.({ look: body.look === true, setup: Number(body.setup) || 0 });
         return json(res, 200, { ok: !!openWindow });
       }
       if (p === '/api/menu') {
@@ -244,7 +302,7 @@ function startServer({
         watcher,
         getSettings: () => settings,
         setSettings: applySettings,
-        close: () => (watcher.stop(), server.close()),
+        close: () => (watcher.stop(), clearInterval(staleTimer), server.close()),
       });
     };
     server.once('error', () => server.listen(0, '127.0.0.1', done)); // 포트가 차 있으면 아무 포트나

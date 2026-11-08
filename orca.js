@@ -75,7 +75,7 @@ function friendly(err, stdout) {
 }
 
 // fixture: 스크린샷용 가짜 에이전트 (지난 시간 → 에이전트 목록). 주면 실제 기록은 읽지 않는다.
-function createWatcher({ interval = 2000, onReport, onUnread, getSettings = () => ({}), fixture } = {}) {
+function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered, getSettings = () => ({}), fixture } = {}) {
   const startedAt = Date.now();
   const state = { ok: false, error: null, at: 0, agents: [], reports: [], orca: ORCA, sources: { orca: false, claude: false, codex: false } };
   let prev = null;
@@ -100,6 +100,7 @@ function createWatcher({ interval = 2000, onReport, onUnread, getSettings = () =
     message: a.message,
     at: a.updatedAt || Date.now(),
     read: !!read,
+    seen: false, // 봤어요 처리하면 보고함 목록에서 빠지고 '본 것'으로 간다 (지우지는 않는다)
     demo: !!a.demo,
   });
   function addReport(r, notify) {
@@ -120,6 +121,7 @@ function createWatcher({ interval = 2000, onReport, onUnread, getSettings = () =
       }
       state.reports.sort((x, y) => y.at - x.at);
       for (const a of list) if (ATTN.has(a.state)) addReport(makeReport(a, 'attention', false), true);
+      for (const a of list) if (ACTIVE.has(a.state)) onWork?.(a);
     } else {
       for (const a of list) {
         const p = prev.get(a.id);
@@ -129,7 +131,9 @@ function createWatcher({ interval = 2000, onReport, onUnread, getSettings = () =
           (wasBusy || (p && p.state === a.state && p.stateStartedAt !== a.stateStartedAt) || (!p && a.stateStartedAt > startedAt));
         if (finishedNow) addReport(makeReport(a, a.interrupted ? 'interrupted' : 'done', false), true);
         if (ATTN.has(a.state) && (!p || p.state !== a.state)) addReport(makeReport(a, 'attention', false), true);
+        if (ACTIVE.has(a.state) && (!p || !ACTIVE.has(p.state))) onWork?.(a);
         if (p && ATTN.has(p.state) && !ATTN.has(a.state)) {
+          onAnswered?.(a, Date.now() - (p.stateStartedAt || Date.now()));
           let changed = false;
           for (const r of state.reports)
             if (r.agentId === a.id && r.kind === 'attention' && !r.read) {
@@ -236,6 +240,14 @@ function createWatcher({ interval = 2000, onReport, onUnread, getSettings = () =
     unread,
     markRead(id) {
       for (const r of state.reports) if (id === '*' || r.id === id) r.read = true;
+      onUnread?.(unread());
+    },
+    markSeen(id, seen = true) {
+      for (const r of state.reports)
+        if (id === '*' || r.id === id) {
+          r.seen = seen;
+          if (seen) r.read = true;
+        }
       onUnread?.(unread());
     },
     startDemo() {

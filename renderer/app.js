@@ -27,6 +27,10 @@ const ATTN = new Set(['waiting', 'blocked']);
 const isBusy = (s) => ACTIVE.has(s) || ATTN.has(s);
 const RECENT_MS = 12 * 3600 * 1000;
 
+// 작업실 아이콘 (index.html 맨 위의 svg 묶음)
+const ico = (n, cls = '') => `<svg class="i${cls ? ` ${cls}` : ''}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const kindIco = (k) => ico(k === 'attention' ? 'attn' : k === 'interrupted' ? 'pause' : 'done');
+
 const api = (path, body) =>
   fetch(path, {
     method: body ? 'POST' : 'GET',
@@ -132,9 +136,10 @@ const _a = new THREE.Vector3();
 function makeLabel(kind) {
   const el = document.createElement('div');
   el.className = 'lbl';
-  el.innerHTML = `<div class="bub" hidden></div><div class="tag ${kind}"><span class="ico"></span><span class="nm"></span></div><div class="sub"></div>`;
+  el.innerHTML = `<div class="bub" hidden></div><div class="tag ${kind}"><span class="ico"></span><span class="rk"></span><span class="nm"></span></div><div class="sub"></div>`;
   $('labels').appendChild(el);
-  return { el, bub: el.querySelector('.bub'), ico: el.querySelector('.ico'), nm: el.querySelector('.nm'), sub: el.querySelector('.sub'), vis: null, bubUntil: 0 };
+  if (kind === 'boss') el.querySelector('.rk').textContent = '사장님';
+  return { el, tag: el.querySelector('.tag'), bub: el.querySelector('.bub'), ico: el.querySelector('.ico'), rk: el.querySelector('.rk'), nm: el.querySelector('.nm'), sub: el.querySelector('.sub'), vis: null, bubUntil: 0 };
 }
 function place(lbl, x, y, z) {
   _v.set(x, y, z).project(camera);
@@ -169,6 +174,24 @@ function popEmoji(lbl, emoji, n = 1) {
 }
 
 // ---------- 자리 ----------
+// ---------- 충성도와 직급 (점수는 서버의 staff.js가 매긴다) ----------
+const RANK_NAMES = ['인턴', '사원', '대리', '과장', '부장', '오른팔'];
+const RANK_AT = [0, 20, 40, 60, 80, 95];
+const staffOfAgent = (d) => (d?.staffKey && lastState.staff?.[d.staffKey]) || null;
+const rankOfAgent = (d) => staffOfAgent(d)?.rank ?? 0;
+const ro = (w) => {
+  // 받침이 있으면 '으로', 없거나 ㄹ이면 '로'
+  const c = w.charCodeAt(w.length - 1) - 0xac00;
+  const jong = c >= 0 && c < 11172 ? c % 28 : 0;
+  return w + (jong && jong !== 8 ? '으로' : '로');
+};
+// 오른팔은 내 자리에서 가까운 책상부터 앉는다
+const seatDist = (k) => {
+  const st = seatById.get(k);
+  return BOSS_SEAT && st ? Math.hypot(st.x - BOSS_SEAT.x, st.z - BOSS_SEAT.z) : 0;
+};
+const NEAR_BOSS = WORK_KEYS.filter((k) => k !== LAYOUT.boss).sort((p, q) => seatDist(p) - seatDist(q));
+
 const used = new Map(); // 자리 → 에이전트 id ('me'는 나)
 function releaseAll(id) {
   for (const [k, who] of used) if (who === id) used.delete(k);
@@ -276,7 +299,14 @@ function meStand() {
 function emote(name) {
   me.emote = name;
   me.emoteT = 0;
-  if (name === 'heart') popEmoji(me.lbl, '💗', 5);
+  if (name === 'heart') {
+    popEmoji(me.lbl, '💗', 5);
+    for (const a of agents.values())
+      if (a.role !== 'leave' && Math.hypot(a.x - me.x, a.z - me.z) < 2.6) {
+        popEmoji(a.lbl, '💗', 1);
+        if (a.data.staffKey) api('/api/loyalty', { id: a.id, ev: 'heart' });
+      }
+  }
   if (name === 'wave') popEmoji(me.lbl, '👋', 1);
 }
 function jump() {
@@ -327,6 +357,7 @@ function hitTest(x, y, z, owner) {
     if (y < 1.25 && Math.hypot(a.x - x, a.z - z) < 0.34) {
       a.hitT = 0;
       popEmoji(a.lbl, '💥', 1);
+      if (owner === 'me' && a.data.staffKey) api('/api/loyalty', { id: a.id, ev: 'shot' });
       return a.id;
     }
   }
@@ -461,7 +492,7 @@ function goTo(a, t, then) {
   a.mode = 'walk';
 }
 function stepWalk(a, dt) {
-  let budget = 2.3 * dt;
+  let budget = (a.role === 'report' && rankOfAgent(a.data) >= 2 ? 3.9 : 2.3) * dt; // 대리부터 뛰어와서 보고
   while (budget > 0 && a.path.length) {
     const wp = a.path[0];
     const dx = wp.x - a.x;
@@ -492,7 +523,19 @@ function stepWalk(a, dt) {
   }
 }
 function toDesk(a, instant) {
-  const k = claim(WORK_KEYS, a.id, hashStr(a.id) % WORK_KEYS.length);
+  let k;
+  if (rankOfAgent(a.data) === 5 && NEAR_BOSS.length) {
+    // 오른팔: 내 자리에서 가장 가까운 책상을 먼저 차지한다 (다른 직원이 앉아 있으면 다른 자리로 보낸다)
+    const best = NEAR_BOSS[0];
+    const who = used.get(best);
+    const other = who && who !== a.id && who !== 'me' ? agents.get(who) : null;
+    if (other && rankOfAgent(other.data) < 5) {
+      used.delete(best);
+      other.role = 'none';
+      setTimeout(() => agents.has(other.id) && isBusy(other.data.state) && toDesk(other, false), 0);
+    }
+    k = claim(NEAR_BOSS, a.id, 0);
+  } else k = claim(WORK_KEYS, a.id, hashStr(a.id) % WORK_KEYS.length);
   a.role = 'work';
   if (!k) {
     const t = { x: W / 2 + 1.4 + (hashStr(a.id) % 5) * 0.45, z: 2.2, h: PI };
@@ -504,8 +547,18 @@ function toDesk(a, instant) {
   if (instant) return sitOn(a, seat);
   goTo(a, approach(seat), () => sitOn(a, seat));
 }
+// 골라서 퇴근시킨 에이전트: 지금 쉬는 동안만 집에 간다 (새 일을 받으면 다시 출근)
+const homeNow = {}; // 서버에 저장되기 전에도 바로 반영되게
+const wentHome = (d) => !isBusy(d.state) && [settings.sentHome?.[d.id], homeNow[d.id]].includes(d.stateStartedAt || 0);
+function sendHome(a, quiet) {
+  const since = a.data.stateStartedAt || 0;
+  homeNow[a.id] = since;
+  api('/api/send-home', { id: a.id, since });
+  leave(a);
+  if (!quiet) UI.toast(`🏠 ${a.data.name}`, '오늘은 퇴근했어요. 새 일을 받으면 다시 출근해요.', 2400);
+}
 function toLounge(a, instant) {
-  if (settings.hideResting) return leave(a, instant);
+  if (settings.hideResting || wentHome(a.data)) return leave(a, instant);
   const k = claim(LOUNGE_KEYS, a.id, hashStr(a.id) % LOUNGE_KEYS.length);
   if (!k) return leave(a, instant);
   a.role = 'rest';
@@ -562,7 +615,8 @@ function walkToMe(a) {
 function deliver(a) {
   const r = a.report;
   a.h = toward(a.x, a.z, me.x, me.z);
-  a.emote = 'wave';
+  a.emote = rankOfAgent(a.data) >= 4 ? 'salute' : 'wave'; // 부장부터 경례
+  if (a.emote === 'salute') popEmoji(a.lbl, '🫡', 1);
   a.emoteT = 0;
   showBubble(a.lbl, reportLine(r), 'report', 9000);
   chime();
@@ -583,7 +637,8 @@ function startReport(a, r) {
   a.role = 'report';
   a.report = r;
   a.tries = 0;
-  UI.toast(`${r.kind === 'interrupted' ? '⏸' : '✅'} ${r.name}`, '보고하러 가는 중이에요', 2600);
+  // 작은 창에서는 이름표와 보고함 줄이 알려 주니 알림 쪽지를 띄우지 않는다 (위쪽이 겹치지 않게)
+  if (!MINI) UI.toast(`${r.kind === 'interrupted' ? '⏸' : '✅'} ${r.name}`, '보고하러 가는 중이에요', 2600);
   walkToMe(a);
 }
 
@@ -632,11 +687,17 @@ let lastState = { agents: [], reports: [], ok: false, unread: 0, sources: {} };
 
 function applySettings(s) {
   if (!s) return;
-  if (s.map && s.map !== MAP_ID) return location.reload(); // 맵이 바뀌면 새로 그린다
+  if (s.map && s.map !== MAP_ID) {
+    // 맵이 바뀌면 새로 그린다 (설정 팝업을 보는 중이면 닫을 때)
+    if (!setupOpen) return location.reload();
+    reloadAfterSetup = true;
+  }
   const name = s.bossName || '나';
-  if (me.lbl.nm.textContent !== name) me.lbl.nm.textContent = name;
+  if (me.lbl.nm.textContent !== name && Date.now() - nameTouched > 3000) me.lbl.nm.textContent = name;
   if (typeof s.sound === 'boolean' && s.sound !== soundOn && Date.now() - soundTouched > 3000) setSound(s.sound, false);
   if (typeof s.hideResting === 'boolean' && s.hideResting !== settings.hideResting && Date.now() - hideTouched > 3000) setHide(s.hideResting, false);
+  if (typeof s.pinPopover === 'boolean' && s.pinPopover !== pinned && Date.now() - pinTouched > 3000) setPin(s.pinPopover, false);
+  if (MINI && typeof s.miniInbox === 'boolean' && s.miniInbox !== miniInboxOpen && Date.now() - miniInboxTouched > 3000) setMiniInbox(s.miniInbox, false);
   Object.assign(settings, s);
 }
 
@@ -653,7 +714,7 @@ function sync(st) {
     const busy = isBusy(d.state);
     if (!agents.has(d.id)) {
       if (!busy && now - (d.updatedAt || 0) > RECENT_MS) continue;
-      if (!busy && settings.hideResting && !reporting.has(d.id)) continue;
+      if (!busy && (settings.hideResting || wentHome(d)) && !reporting.has(d.id)) continue;
     }
     seen.add(d.id);
     const a = agents.get(d.id) || makeAgent(d);
@@ -665,7 +726,7 @@ function sync(st) {
     performed.add(r.id);
     if (first || r.read) continue;
     if (r.kind === 'attention') {
-      UI.toast(`❗ ${r.name}`, '확인이 필요해요. 자리에서 손을 들고 있어요.', 3500);
+      if (!MINI) UI.toast(`❗ ${r.name}`, '확인이 필요해요. 자리에서 손을 들고 있어요.', 3500);
       chime(true);
       continue;
     }
@@ -677,11 +738,15 @@ function sync(st) {
     if (a.role === 'report' || a.role === 'leave') continue;
     const busy = isBusy(a.data.state);
     if (busy && a.role !== 'work') toDesk(a, first);
-    else if (!busy && (a.role !== 'rest' || settings.hideResting)) toLounge(a, first);
+    else if (!busy && (a.role !== 'rest' || settings.hideResting || wentHome(a.data))) toLounge(a, first);
   }
   synced = true;
   renderHud(st);
   renderInbox();
+  updateRankTags();
+  checkPromos(st, first);
+  renderStaff();
+  renderRest();
   drawStatus(st);
 }
 
@@ -692,7 +757,7 @@ async function refresh() {
     if (!st.at) return; // 서버가 아직 한 번도 못 읽었다
     sync(st);
   } catch {
-    $('conn').textContent = '작업실 서버와 연결이 끊겼어요';
+    $('conn').querySelector('.ct').textContent = '작업실 서버와 연결이 끊겼어요';
     $('conn').classList.add('off');
   }
 }
@@ -715,35 +780,66 @@ function renderHud(st) {
   const conn = $('conn');
   const src = st.sources || {};
   const names = [src.orca && 'Orca', src.claude && 'Claude', src.codex && 'Codex'].filter(Boolean);
-  conn.textContent = names.length ? `보는 중: ${names.join(' · ')}` : '볼 수 있는 앱이 없어요';
-  conn.title = st.error ? `Orca: ${st.error}` : '';
+  conn.querySelector('.ct').textContent = names.length ? names.join(' · ') : '볼 수 있는 앱이 없어요';
+  conn.title = `${names.length ? `보는 중: ${names.join(', ')}` : '볼 수 있는 앱이 없어요'}${st.error ? `\nOrca: ${st.error}` : ''}\n누르면 연동 설정이 열려요`;
   conn.classList.toggle('off', !names.length);
   const u = st.unread || 0;
   $('unreadCnt').textContent = u || '';
   $('unreadCnt2').textContent = u || '';
+  // 보고함을 접어 둔 작은 창: 새 보고가 오면 접힌 줄을 한 번 반짝인다
+  if (MINI && !miniInboxOpen && u > unreadSeen) {
+    const el = $('inbox');
+    el.classList.remove('ping');
+    void el.offsetWidth;
+    el.classList.add('ping');
+  }
+  unreadSeen = u;
   document.title = u ? `(${u}) 에이전트 작업실` : '에이전트 작업실';
 }
 
 let inboxFilter = 'all';
 let inboxSig = '';
-function renderInbox() {
+// 접힌 보고함 줄에 보여 줄 한 줄: 안 읽은 보고가 있으면 그것, 없으면 가장 최근 보고
+function renderPeek() {
   const all = lastState.reports || [];
-  const list = all.filter((r) => inboxFilter === 'all' || (inboxFilter === 'unread' ? !r.read : r.kind === 'attention'));
+  const r = all.find((x) => !x.read && !x.seen) || all.find((x) => !x.seen);
+  const t = r ? `${kindIco(r.kind)}${esc(r.name)} · ${ago(r.at)}` : all.length ? '새 보고가 없어요' : '아직 받은 보고가 없어요';
+  if ($('inboxPeek').innerHTML !== t) $('inboxPeek').innerHTML = t;
+}
+function renderInbox() {
+  if (MINI) renderPeek();
+  const all = lastState.reports || [];
+  const FILTERS = {
+    all: (r) => !r.seen,
+    unread: (r) => !r.seen && !r.read,
+    attention: (r) => !r.seen && r.kind === 'attention',
+    seen: (r) => r.seen,
+  };
+  const list = all.filter(FILTERS[inboxFilter] || FILTERS.all);
   const sig = JSON.stringify([inboxFilter, list.map((r) => [r.id, r.read]), Math.floor(Date.now() / 60000)]);
   if (sig === inboxSig) return;
   inboxSig = sig;
   if (!list.length) {
-    $('inboxList').innerHTML = `<li class="empty">${
-      inboxFilter === 'all' ? '에이전트가 일을 끝낼 때마다<br>여기에 보고가 쌓여요.<br>🧪 연습을 눌러 미리 볼 수도 있어요.' : '여기는 비어 있어요.'
-    }</li>`;
+    const empty =
+      inboxFilter === 'seen'
+        ? '봤어요 처리한 보고가 여기 모여요.'
+        : inboxFilter !== 'all'
+          ? '여기는 비어 있어요.'
+          : all.length
+            ? '다 봤어요 👏<br>본 보고는 \'본 것\' 탭에 있어요.'
+            : '에이전트가 일을 끝낼 때마다<br>여기에 보고가 쌓여요.<br>🧪 연습을 눌러 미리 볼 수도 있어요.';
+    $('inboxList').innerHTML = `<li class="empty">${empty}</li>`;
     return;
   }
   $('inboxList').innerHTML = list
     .map((r) => {
-      const ic = r.kind === 'attention' ? '❗' : r.kind === 'interrupted' ? '⏸' : '✅';
+      const ic = kindIco(r.kind);
       const where = [r.app, r.repo, r.branch].filter(Boolean).join(' · ');
       const text = r.kind === 'attention' ? '답이나 허락을 기다리고 있어요' : clean(r.message) || '보고 내용이 없어요';
-      return `<li class="k-${r.kind}${r.read ? '' : ' unread'}" data-id="${esc(r.id)}"><span class="ic">${ic}</span><b>${esc(r.name)}</b><small>${esc(where)}${where ? ' · ' : ''}${ago(r.at)}</small><p>${esc(text)}</p></li>`;
+      const act = r.seen
+        ? `<button type="button" class="iact" data-act="unsee" title="보고함 목록으로 되돌려요">${ico('undo')}되돌리기</button>`
+        : `<button type="button" class="iact" data-act="seen" title="목록에서 빼요. '본 것' 탭에서 다시 볼 수 있어요.">${ico('check')}봤어요</button>`;
+      return `<li class="k-${r.kind}${r.read ? '' : ' unread'}" data-id="${esc(r.id)}"><span class="ic">${ic}</span><b>${esc(r.name)}</b><small>${esc(where)}${where ? ' · ' : ''}${ago(r.at)}</small><p>${esc(text)}</p>${act}</li>`;
     })
     .join('');
 }
@@ -813,7 +909,7 @@ let openReportId = null;
 function openReport(r) {
   openReportId = r.id;
   const icon = $('rIcon');
-  icon.textContent = r.kind === 'attention' ? '❗' : r.kind === 'interrupted' ? '⏸' : '✅';
+  icon.innerHTML = kindIco(r.kind);
   icon.className = `ricon k-${r.kind}`;
   $('rTitle').textContent = r.name;
   $('rMeta').textContent = [r.app || typeLabel(r.type), r.repo, r.branch, `${new Date(r.at).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}`]
@@ -830,6 +926,7 @@ function openReport(r) {
   $('rFolder').hidden = !r.path;
   $('rOrca').textContent = `${r.app || '앱'} 열기`;
   $('rOrca').hidden = !r.app || r.demo;
+  $('rSeen').hidden = !!r.seen;
   $('report').hidden = false;
   UI.openLayer('report', closeReport);
   if (!r.read) {
@@ -846,6 +943,11 @@ function closeReport() {
 const currentReport = () => (lastState.reports || []).find((r) => r.id === openReportId);
 $('rClose').onclick = closeReport;
 $('rOk').onclick = closeReport;
+$('rSeen').onclick = () => {
+  const id = openReportId;
+  closeReport();
+  if (id) setSeen([id], true);
+};
 $('rOrca').onclick = () => {
   const r = currentReport();
   if (r?.app) api('/api/open-app', { app: r.app });
@@ -856,24 +958,100 @@ $('rFolder').onclick = () => {
 };
 $('inboxList').addEventListener('click', (e) => {
   const li = e.target.closest('li[data-id]');
-  const r = li && (lastState.reports || []).find((x) => x.id === li.dataset.id);
+  if (!li) return;
+  const act = e.target.closest('[data-act]');
+  if (act) return setSeen([li.dataset.id], act.dataset.act === 'seen');
+  const r = (lastState.reports || []).find((x) => x.id === li.dataset.id);
   if (r) openReport(r);
 });
+// 봤어요: 지우지 않고 목록에서만 뺀다 ('본 것' 탭에서 다시 보거나 되돌릴 수 있다)
+function setSeen(ids, seen, all = false) {
+  const set = new Set(ids);
+  const lis = [...$('inboxList').querySelectorAll('li[data-id]')].filter((li) => set.has(li.dataset.id));
+  lis.forEach((li, i) => setTimeout(() => li.classList.add('bye'), Math.min(i, 10) * 25));
+  const wait = lis.length ? 220 + Math.min(lis.length, 10) * 25 : 0;
+  setTimeout(() => {
+    for (const r of lastState.reports || [])
+      if (set.has(r.id)) {
+        r.seen = seen;
+        if (seen) r.read = true;
+      }
+    inboxSig = '';
+    renderInbox();
+  }, wait);
+  const sent = all ? [api('/api/seen', { all: true, seen })] : ids.map((id) => api('/api/seen', { id, seen }));
+  Promise.all(sent).then(() => setTimeout(refresh, wait + 50));
+}
 for (const b of document.querySelectorAll('.itabs button'))
   b.addEventListener('click', () => {
-    inboxFilter = b.dataset.f;
     for (const x of document.querySelectorAll('.itabs button')) x.setAttribute('aria-selected', String(x === b));
+    if (b.dataset.f === 'staff') return setInboxView('staff'); // 직원 명부
+    inboxFilter = b.dataset.f;
+    setInboxView('reports');
     renderInbox();
   });
-$('readAll').onclick = () => api('/api/read', { all: true }).then(refresh);
+// 모두 읽음: 지금 목록에 있는 보고를 모두 봤어요 처리해서 깔끔하게 비운다
+$('readAll').onclick = () => {
+  const ids = (lastState.reports || []).filter((r) => !r.seen).map((r) => r.id);
+  if (ids.length) setSeen(ids, true, true);
+};
 $('demoBtn').onclick = () =>
   api('/api/demo', {}).then(() => UI.toast('🧪 연습 에이전트가 출근했어요', '13초쯤 일하다가 나한테 보고하러 와요.', 3200));
 const setInbox = (open) => {
   $('inbox').classList.toggle('collapsed', !open);
   $('inboxShow').hidden = open;
 };
-$('inboxHide').onclick = () => setInbox(false);
-$('inboxShow').onclick = () => setInbox(true);
+// 상단바에서 펼친 작은 창: 보고함은 한 줄로 접어 두고 누르면 펼친다 (창 높이는 main.js가 맞춘다)
+let miniInboxOpen = !!settings.miniInbox;
+let miniInboxTouched = 0;
+let unreadSeen = 0;
+function setMiniInbox(open, save) {
+  miniInboxOpen = open;
+  document.body.classList.toggle('ishut', !open);
+  const b = $('inboxHide');
+  b.textContent = open ? '⌃' : '펼치기 ⌄';
+  b.title = open ? '보고함 접기' : '보고함 펼치기';
+  b.setAttribute('aria-label', b.title);
+  b.setAttribute('aria-expanded', String(open));
+  if (save) {
+    miniInboxTouched = Date.now();
+    api('/api/settings', { miniInbox: open });
+  }
+}
+if (MINI) {
+  setMiniInbox(miniInboxOpen, false);
+  $('inboxHide').onclick = (e) => {
+    e.stopPropagation();
+    setMiniInbox(!miniInboxOpen, true);
+  };
+  document.querySelector('#inbox .ihead').addEventListener('click', () => {
+    if (!miniInboxOpen) setMiniInbox(true, true);
+  });
+} else {
+  $('inboxHide').onclick = () => setInbox(false);
+  $('inboxShow').onclick = () => setInbox(true);
+}
+
+// 작은 창 고정: 켜 두면 다른 곳을 눌러도 안 닫히고, 맨 윗줄을 끌어서 옮길 수 있다
+let pinned = !!settings.pinPopover;
+let pinTouched = 0;
+function setPin(on, save) {
+  pinned = on;
+  document.body.classList.toggle('pinned', on);
+  $('mPin').setAttribute('aria-pressed', String(on));
+  $('mPin').title = on ? '고정 풀기' : '고정하기: 다른 곳을 눌러도 안 닫혀요';
+  if (save) {
+    pinTouched = Date.now();
+    api('/api/settings', { pinPopover: on });
+    UI.toast(
+      on ? '📌 작은 창을 고정했어요' : '고정을 풀었어요',
+      on ? '다른 곳을 눌러도 안 닫혀요. 맨 윗줄을 끌면 옮길 수 있어요.' : '다른 곳을 누르면 다시 접혀요.',
+      2600,
+    );
+  }
+}
+setPin(pinned, false);
+$('mPin').onclick = () => setPin(!pinned, true);
 
 // ---------- 소리, 숨기기, 맵 ----------
 let soundOn = settings.sound !== false;
@@ -881,7 +1059,7 @@ let soundTouched = 0;
 function setSound(on, save) {
   soundOn = on;
   $('soundBtn').setAttribute('aria-pressed', String(on));
-  $('soundBtn').textContent = on ? '🔔' : '🔕';
+  $('soundBtn').innerHTML = ico(on ? 'bell' : 'bell-off');
   if (save) {
     soundTouched = Date.now();
     api('/api/settings', { sound: on });
@@ -896,20 +1074,50 @@ function setHide(on, save) {
     $(id).setAttribute('aria-pressed', String(on));
     $(id).title = on ? '쉬는 에이전트 보이기' : '쉬는 에이전트 숨기기';
   }
-  $('hideBtn').textContent = on ? '💤 쉬는 에이전트 숨김' : '💤 쉬는 에이전트 보기';
+  $('restHideAll').checked = on;
   if (on) for (const a of [...agents.values()]) if (a.role === 'rest') leave(a);
   if (save) {
     hideTouched = Date.now();
     api('/api/settings', { hideResting: on }).then(refresh);
-    UI.toast(on ? '쉬는 에이전트를 숨겼어요' : '쉬는 에이전트도 보여요', on ? '일 끝난 에이전트는 보고하고 퇴근해요.' : '일 끝난 에이전트는 라운지에서 쉬어요.', 2000);
+    UI.toast(on ? '일 끝나면 바로 퇴근해요' : '일 끝나면 라운지에서 쉬어요', on ? '보고만 하고 집에 가요.' : '쉬는 에이전트도 작업실에 남아요.', 2000);
   }
 }
 setHide(!!settings.hideResting, false);
-$('hideBtn').onclick = () => setHide(!settings.hideResting, true);
-$('mHide').onclick = () => setHide(!settings.hideResting, true);
+$('hideBtn').onclick = (e) => (e.stopPropagation(), toggleRest());
+$('mHide').onclick = (e) => (e.stopPropagation(), toggleRest());
 $('mapSel').value = MAP_ID;
 $('mapSel').onchange = (e) => api('/api/settings', { map: e.target.value }).then(() => location.reload());
-$('setupBtn').onclick = () => api('/api/open-setup', { step: 2 });
+$('conn').onclick = () => openSetupModal(2);
+$('tutBtn').onclick = () => openSetupModal(1);
+
+// ---------- 튜토리얼 / 연동 설정 팝업 (설정 화면을 앱 안에 띄운다) ----------
+let setupOpen = false;
+let reloadAfterSetup = false;
+function openSetupModal(step = 1) {
+  if (MINI) return api('/api/open-window', { setup: step }); // 작은 창은 좁아서 큰 창에서 연다
+  $('setupFrame').src = `/setup?t=${encodeURIComponent(TOKEN)}&embed=1&step=${step}`;
+  $('setupModal').hidden = false;
+  setupOpen = true;
+  UI.openLayer('setup', closeSetupModal);
+  setTimeout(() => $('setupFrame').focus(), 50);
+}
+function closeSetupModal() {
+  if (!setupOpen) return;
+  setupOpen = false;
+  $('setupModal').hidden = true;
+  $('setupFrame').src = 'about:blank';
+  UI.closeLayer('setup');
+  if (reloadAfterSetup) location.reload();
+  else refresh();
+}
+$('setupModal').addEventListener('click', (e) => {
+  if (e.target === $('setupModal')) closeSetupModal();
+});
+addEventListener('message', (e) => {
+  if (e.origin === location.origin && e.data?.type === 'setup-close') closeSetupModal();
+});
+window.openSetupFromMain = (step) => !MINI && openSetupModal(step); // 상단바 메뉴에서 부른다
+if (!MINI && q.get('open') === 'setup') setTimeout(() => openSetupModal(Number(q.get('step')) || 1), 400);
 $('bigBtn').onclick = () => api('/api/open-window', {});
 $('menuBtn').onclick = () => api('/api/menu', {});
 let actx = null;
@@ -1115,14 +1323,25 @@ let cardAgent = null;
 function showCard(hit, x, y) {
   const card = $('card');
   let btns;
+  const cl = card.querySelector('.cloyal');
+  const sf = hit.boss ? null : staffOfAgent(hit.agent.data);
+  cl.hidden = !sf;
+  if (sf) {
+    const next = RANK_AT[sf.rank + 1];
+    cl.innerHTML = `<div class="lrow"><span class="rk r${sf.rank}">${RANK_NAMES[sf.rank]}</span><b>충성도 ${sf.pts}</b><small>${next != null ? `${RANK_NAMES[sf.rank + 1]}까지 ${next - sf.pts}점` : '최고 직급이에요'}</small></div><div class="lgauge"><i style="width:${sf.pts}%"></i></div>${
+      sf.last ? `<small class="llast">최근: ${esc(sf.last.why)} ${sf.last.delta > 0 ? '+' : ''}${sf.last.delta}</small>` : ''
+    }`;
+  }
+  card.querySelector('.cname').hidden = !!hit.boss;
+  $('cardName').hidden = !hit.boss;
   if (hit.boss) {
     cardAgent = null;
     const n = [...agents.values()].filter((a) => ACTIVE.has(a.data.state)).length;
-    card.querySelector('.cname').textContent = me.lbl.nm.textContent || '나';
+    $('cardName').value = me.lbl.nm.textContent || '나';
     card.querySelector('.cstat').textContent = n ? `에이전트 ${n}명이 일하는 중이에요` : '지금은 다들 쉬는 중이에요';
-    card.querySelector('.cbody').textContent = '방향키로 걷고, F로 앉고, G로 종이 총을 꺼내요.';
+    card.querySelector('.cbody').textContent = '이름은 위 칸에서 바로 바꿀 수 있어요. 방향키로 걷고, F로 앉고, G로 종이 총을 꺼내요.';
     card.querySelector('.cdot').style.background = bossLook.cloth;
-    btns = `<button type="button" class="btn" data-c="look">🎨 꾸미기</button>`;
+    btns = `<button type="button" class="btn" data-c="look">${ico('face')}꾸미기</button>`;
   } else {
     const a = hit.agent;
     cardAgent = a;
@@ -1138,7 +1357,7 @@ function showCard(hit, x, y) {
     const hasReport = (lastState.reports || []).some((r) => r.agentId === a.id);
     btns = `${hasReport ? '<button type="button" class="btn ghost" data-c="report">보고 보기</button>' : ''}${
       d.app && !d.demo ? `<button type="button" class="btn" data-c="app">${esc(d.app)} 열기</button>` : ''
-    }`;
+    }${a.role === 'rest' ? `<button type="button" class="btn ghost" data-c="home">${ico('home')}퇴근시키기</button>` : ''}`;
   }
   card.querySelector('.cbtns').innerHTML = btns;
   card.style.left = clamp(x + 14, 8, innerWidth - 296) + 'px';
@@ -1147,6 +1366,7 @@ function showCard(hit, x, y) {
   UI.openLayer('card', hideCard, false);
 }
 function hideCard() {
+  if (!$('cardName').hidden) saveBossName($('cardName').value);
   $('card').hidden = true;
   UI.closeLayer('card');
 }
@@ -1157,19 +1377,47 @@ $('card').addEventListener('click', (e) => {
   const a = cardAgent;
   hideCard();
   if (c === 'look') openLook();
+  else if (c === 'home' && a) sendHome(a);
   else if (c === 'app' && a?.data.app) api('/api/open-app', { app: a.data.app });
   else if (c === 'report' && a) {
     const r = (lastState.reports || []).find((x) => x.agentId === a.id);
     if (r) openReport(r);
   }
 });
-const openLook = () =>
+function openLook() {
+  if (MINI) return api('/api/open-window', { look: true });
+  $('avName').value = me.lbl.nm.textContent || '나';
   openEditor(bossLook, (l) => {
     bossLook = normalizeLook(l);
     me.av.setLook(bossLook);
     api('/api/settings', { bossLook });
   });
+}
 $('lookBtn').onclick = openLook;
+window.openLookFromMain = () => !MINI && openLook(); // 작은 창에서 꾸미기를 누르면 main.js가 큰 창에서 부른다
+
+// ---------- 내 이름 바꾸기 (캐릭터 카드, 꾸미기 창) ----------
+let nameTouched = 0;
+function saveBossName(v) {
+  const name = String(v || '').trim().slice(0, 16) || '나';
+  if (name === (me.lbl.nm.textContent || '나')) return;
+  me.lbl.nm.textContent = name;
+  settings.bossName = name;
+  nameTouched = Date.now();
+  api('/api/settings', { bossName: name });
+}
+for (const id of ['cardName', 'avName']) {
+  const inp = $(id);
+  inp.addEventListener('change', () => saveBossName(inp.value));
+  inp.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') {
+      inp.value = me.lbl.nm.textContent || '나';
+      inp.blur();
+    }
+  });
+}
 
 addEventListener('resize', () => {
   VB = viewBox();
@@ -1221,9 +1469,10 @@ function frame() {
   updateMe(dt);
   for (const a of agents.values()) {
     if (a.mode === 'walk') stepWalk(a, dt);
-    a.moving = a.mode === 'walk' ? 1 : 0;
+    const rk = rankOfAgent(a.data);
+    a.moving = a.mode === 'walk' ? (a.role === 'report' && rk >= 2 ? 2 : 1) : 0;
     const s = a.data.state;
-    a.act = a.role === 'work' && a.st === 1 && s === 'working' ? 'laptop' : '';
+    a.act = a.role === 'work' && a.st === 1 && s === 'working' ? 'laptop' : a.role === 'report' && rk >= 3 ? 'coffee' : ''; // 과장부터 커피 들고 보고
     if (ATTN.has(s) && a.role === 'work' && a.mode !== 'walk' && a.emoteT > 2.4) {
       a.emote = 'wave';
       a.emoteT = 0;
@@ -1262,6 +1511,164 @@ updateCamera(0.016);
 renderer.render(scene, camera);
 requestAnimationFrame(frame);
 setTimeout(() => $('loading').classList.add('done'), 150);
+if (!MINI && q.get('open') === 'look') setTimeout(openLook, 500); // 작은 창에서 꾸미기를 눌러 큰 창이 새로 열린 경우
+// ---------- 직급 배지, 승진, 직원 명부 ----------
+function updateRankTags() {
+  for (const a of agents.values()) {
+    const sf = staffOfAgent(a.data);
+    const r = sf ? sf.rank : -1;
+    if (a.rankShown === r) continue;
+    a.rankShown = r;
+    a.lbl.rk.textContent = r >= 0 ? RANK_NAMES[r] : '';
+    a.lbl.rk.className = `rk r${r}`;
+    a.lbl.tag.classList.toggle('gold', r === 5);
+  }
+}
+const promoSeen = new Set();
+function checkPromos(st, first) {
+  for (const pr of st.promos || []) {
+    if (promoSeen.has(pr.id)) continue;
+    promoSeen.add(pr.id);
+    if (first || Date.now() - pr.at > 60000) continue;
+    UI.toast(`🎉 ${pr.name}`, `${ro(pr.title)} 승진했어요!`, 3800);
+    const a = [...agents.values()].find((x) => x.data.staffKey === pr.key);
+    const x = a ? a.x : me.x;
+    const z = a ? a.z : me.z;
+    for (let i = 0; i < 4; i++) setTimeout(() => fx.burst(x + (Math.random() - 0.5) * 1.2, 1.6 + Math.random() * 0.6, z + (Math.random() - 0.5) * 1.2, 40), i * 260);
+    chime();
+  }
+}
+let inboxView = 'reports';
+let staffSig = '';
+function setInboxView(v) {
+  inboxView = v;
+  document.body.classList.toggle('staffv', v === 'staff');
+  $('staffView').hidden = v !== 'staff';
+  $('inboxList').hidden = v === 'staff';
+  staffSig = '';
+  renderStaff();
+}
+function renderStaff() {
+  if (inboxView !== 'staff') return;
+  const list = Object.entries(lastState.staff || {}).sort((p, q) => q[1].pts - p[1].pts);
+  const sig = JSON.stringify(list.map(([k, v]) => [k, v.pts, v.today]));
+  if (sig === staffSig) return;
+  staffSig = sig;
+  const mvp = list.filter(([, v]) => v.today > 0).sort((p, q) => q[1].today - p[1].today)[0];
+  $('mvp').innerHTML = `<span class="mvpic">🏆</span><span><small>오늘의 MVP</small><b>${mvp ? esc(mvp[1].name) : '아직 없어요'}</b><em>${
+    mvp ? `오늘 +${mvp[1].today}점` : '보고를 빨리 읽어 주면 점수가 올라요'
+  }</em></span>`;
+  $('staffList').innerHTML = list.length
+    ? list
+        .map(([, v], i) => {
+          const next = RANK_AT[v.rank + 1];
+          return `<li><span class="sno">${i + 1}</span><span class="rk r${v.rank}">${RANK_NAMES[v.rank]}</span><b>${esc(v.name)}</b><small>${v.pts}점${
+            next != null ? ` · ${RANK_NAMES[v.rank + 1]}까지 ${next - v.pts}점` : ' · 최고 직급'
+          }${v.today ? ` · 오늘 ${v.today > 0 ? '+' : ''}${v.today}` : ''}</small><div class="lgauge"><i style="width:${v.pts}%"></i></div></li>`;
+        })
+        .join('')
+    : '<li class="empty">에이전트가 일을 하면<br>여기에 직원으로 올라와요.</li>';
+}
+
+// ---------- 쉬는 에이전트: 목록에서 골라 퇴근시키기 ----------
+let restOpen = false;
+let restSig = '';
+const restingNow = () =>
+  (lastState.agents || [])
+    .filter((d) => !isBusy(d.state) && Date.now() - (d.updatedAt || 0) < RECENT_MS)
+    .sort((p, q) => (q.updatedAt || 0) - (p.updatedAt || 0));
+function toggleRest(force) {
+  restOpen = force ?? !restOpen;
+  $('restPanel').hidden = !restOpen;
+  for (const id of ['hideBtn', 'mHide']) $(id).setAttribute('aria-expanded', String(restOpen));
+  if (restOpen) {
+    const b = $(MINI ? 'mHide' : 'hideBtn').getBoundingClientRect();
+    const P = $('restPanel');
+    P.style.top = `${Math.round(b.bottom + 8)}px`;
+    P.style.right = MINI ? '10px' : `${Math.max(10, Math.round(innerWidth - b.right))}px`;
+    restSig = '';
+    renderRest();
+    UI.openLayer('rest', () => toggleRest(false), false);
+  } else UI.closeLayer('rest');
+}
+function renderRest() {
+  const list = restingNow();
+  const awake = list.filter((d) => !wentHome(d) && !settings.hideResting);
+  // 버튼의 숫자: 작업실에 남아 쉬는 에이전트
+  const n = awake.length;
+  $('hideBtn').innerHTML = `${ico('rest')}<span class="w">쉬는 에이전트</span>${n ? `<b class="rc">${n}</b>` : ''}`;
+  $('mHide').classList.toggle('has', n > 0);
+  if (!restOpen) return;
+  const sig = JSON.stringify([list.map((d) => [d.id, wentHome(d)]), settings.hideResting, Math.floor(Date.now() / 60000)]);
+  if (sig === restSig) return;
+  restSig = sig;
+  $('restCount').textContent = list.length ? `${list.length}명` : '';
+  $('restHideAll').checked = !!settings.hideResting;
+  $('restList').innerHTML = list.length
+    ? list
+        .map((d) => {
+          const home = wentHome(d) || settings.hideResting;
+          const sub = [d.app || typeLabel(d.type), d.worktree?.repo, ago(d.updatedAt)].filter(Boolean).join(' · ');
+          return `<li class="${home ? 'home' : ''}"><label><input type="checkbox" data-id="${esc(d.id)}" ${home ? 'disabled' : ''}><span class="rt"><b>${esc(d.name)}</b><small>${esc(sub)}</small></span></label>${
+            home ? (settings.hideResting ? '<span class="gone">퇴근함</span>' : `<button type="button" class="btn ghost sm" data-back="${esc(d.id)}">다시 부르기</button>`) : ''
+          }</li>`;
+        })
+        .join('')
+    : '<li class="empty">지금 쉬는 에이전트가 없어요.</li>';
+  restPick();
+}
+function restPick() {
+  const boxes = [...$('restList').querySelectorAll('input[data-id]:not(:disabled)')];
+  const n = boxes.filter((b) => b.checked).length;
+  $('restGo').disabled = !n;
+  $('restGo').textContent = n ? `${n}명 퇴근시키기` : '퇴근시키기';
+  $('restAll').checked = boxes.length > 0 && n === boxes.length;
+  $('restAll').disabled = !boxes.length;
+}
+$('restList').addEventListener('change', restPick);
+$('restAll').addEventListener('change', (e) => {
+  for (const b of $('restList').querySelectorAll('input[data-id]:not(:disabled)')) b.checked = e.target.checked;
+  restPick();
+});
+$('restGo').onclick = () => {
+  const ids = [...$('restList').querySelectorAll('input[data-id]:checked')].map((b) => b.dataset.id);
+  for (const id of ids) {
+    const a = agents.get(id);
+    const d = (lastState.agents || []).find((x) => x.id === id);
+    if (!d) continue;
+    if (a) sendHome(a, true);
+    else {
+      homeNow[id] = d.stateStartedAt || 0;
+      api('/api/send-home', { id, since: d.stateStartedAt || 0 });
+    }
+  }
+  if (ids.length) UI.toast(`🏠 ${ids.length}명 퇴근했어요`, '새 일을 받으면 다시 출근해요.', 2400);
+  restSig = '';
+  renderRest();
+};
+$('restList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-back]');
+  if (!b) return;
+  const id = b.dataset.back;
+  delete homeNow[id];
+  if (settings.sentHome) delete settings.sentHome[id];
+  api('/api/send-home', { id, back: true }).then(refresh);
+  restSig = '';
+  renderRest();
+});
+$('restHideAll').addEventListener('change', (e) => {
+  setHide(e.target.checked, true);
+  restSig = '';
+  renderRest();
+});
+$('restClose').onclick = () => toggleRest(false);
+document.addEventListener('pointerdown', (e) => {
+  if (restOpen && !e.target.closest('#restPanel, #hideBtn, #mHide')) toggleRest(false);
+});
+
+// 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
+if (q.get('debug') === '1') window.__ao = { agents, me, used, NEAR_BOSS, rank: rankOfAgent, state: () => lastState };
+
 if (boot && Array.isArray(boot.agents) && boot.at) sync(boot);
 setInterval(refresh, 1000);
 setInterval(() => {

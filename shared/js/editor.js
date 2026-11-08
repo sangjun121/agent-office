@@ -1,7 +1,7 @@
 // 캐릭터 꾸미기 창 + 빙글빙글 도는 미리보기
 import * as THREE from 'three';
 import { Avatar } from './avatar.js';
-import { LOOK_PARTS, COLOR_PARTS, normalizeLook, randomLook, bamtiLook } from './config.js';
+import { LOOK_PARTS, COLOR_PARTS, normalizeLook, randomLook, bamtiLook, starLook } from './config.js';
 import { $, esc } from './util.js';
 import * as UI from './ui.js';
 
@@ -112,6 +112,11 @@ export function openEditor(look, onChange) {
   if ($('avBamti'))
     $('avBamti').onclick = () => {
       Object.assign(L, bamtiLook());
+      apply();
+    };
+  if ($('avStar'))
+    $('avStar').onclick = () => {
+      Object.assign(L, starLook());
       apply();
     };
   sync();

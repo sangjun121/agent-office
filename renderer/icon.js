@@ -1,10 +1,11 @@
 // 앱 아이콘과 DMG 배경 그리기: 앱에서 쓰는 3D 캐릭터와 가구를 그대로 렌더링한다.
-// ?v=desk | wave | room → 1024px 아이콘, ?v=dmgbg&s=1|2 → DMG 창 배경
+// ?v=mascot | text | desk | wave | room → 1024px 아이콘, ?v=tray → 상단바 아이콘, ?v=dmgbg&s=1|2 → DMG 창 배경
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Avatar } from '/js/avatar.js';
 import { normalizeLook } from '/js/config.js';
 import { setBrand, OFFICE_BRAND } from '/js/brand.js';
+import { DRAFTS, appIconSvg, svgCanvas, traySvg } from './mascot.js';
 
 setBrand(OFFICE_BRAND);
 
@@ -345,8 +346,15 @@ const canvas =
     ? drawDmgBg(Number(q.get('s')) || 1)
     : V === 'text'
       ? drawTextIcon(q.get('text') || '작업실')
-      : V === 'tray'
-        ? drawTray(Number(q.get('size')) || 36, q.get('ch') || '작')
-        : drawIcon();
+      : V === 'draft'
+        ? await svgCanvas(DRAFTS[q.get('id')]?.[q.get('kind') === 'tray' ? 'tray' : 'app'] || appIconSvg(), Number(q.get('size')) || 1024)
+      : V === 'mascot'
+        ? await svgCanvas(appIconSvg(), 1024)
+        : V === 'tray'
+          ? q.get('ch')
+            ? drawTray(Number(q.get('size')) || 36, q.get('ch'))
+            : await svgCanvas(traySvg(q.get('glyph')), Number(q.get('size')) || 36)
+          : drawIcon();
+if (V === 'mascot') window.__svg = appIconSvg({ favicon: true });
 window.__png = canvas.toDataURL('image/png');
 document.title = 'ready';

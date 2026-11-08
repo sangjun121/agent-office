@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { app, BrowserWindow } = require('electron');
 const { startServer } = require('../server.js');
+const { getAppIcons } = require('../appicons.js');
 
 const DOCS = path.join(__dirname, '..', 'docs');
 const ZOOM = 2;
@@ -70,10 +71,26 @@ const DETECT = {
   codex: { found: true, dir: '~/.codex/sessions', recent: 7, apps: [{ name: 'Codex 앱', n: 5 }, { name: 'VS Code Codex', n: 2 }] },
 };
 
+// 직원 명부 예시 (가짜 점수)
+const TD = new Date();
+const TODAY = `${TD.getFullYear()}-${TD.getMonth() + 1}-${TD.getDate()}`;
+const STAFF = Object.fromEntries(
+  [
+    ['claude|docs', 'Claude · docs', 97, 2],
+    ['codex|design-system', 'Codex · design-system', 81, 0],
+    ['claude|shop-web', 'Claude · shop-web', 63, 3],
+    ['codex|shop-api', 'Codex · shop-api', 44, 0],
+    ['codex|shop-web', 'Codex · shop-web', 35, 1],
+    ['claude|landing', 'Claude · landing', 22, 5],
+    ['claude|shop-api', 'Claude · shop-api', 8, 1],
+  ].map(([k, name, pts, d]) => [k, { pts, name, since: Date.now() - 9 * 86400000, lastDay: TODAY, dDay: TODAY, dPts: d, caps: {} }]),
+);
+const CHECK = process.env.CHECK ? '/tmp/ao-check' : ''; // 확인용 장면을 더 찍을 곳
+
 async function server(map) {
   const settingsPath = path.join(os.tmpdir(), `agent-office-shots-${map}.json`);
-  fs.writeFileSync(settingsPath, JSON.stringify({ setupDone: true, bossName: '나', map, sound: false, notify: false }));
-  return startServer({ port: 0, settingsPath, fixture: fixture(), fixtureDetect: DETECT });
+  fs.writeFileSync(settingsPath, JSON.stringify({ setupDone: true, bossName: '나', map, sound: false, notify: false, staff: STAFF }));
+  return startServer({ port: 0, settingsPath, fixture: fixture(), fixtureDetect: DETECT, getAppIcons });
 }
 async function until(win, expr, ms = 20000) {
   const end = Date.now() + ms;
@@ -121,6 +138,15 @@ app.whenReady().then(async () => {
     await click(win, `#avBody button[data-k="${k}"][data-v="${v}"]`);
   await sleep(1500);
   await save(win, 'character.jpg');
+  // 직원 명부
+  await win.webContents.executeJavaScript("document.getElementById('avDone').click(); document.querySelector('.itabs [data-f=staff]').click()");
+  await sleep(700);
+  await save(win, 'staff.jpg');
+  if (CHECK) {
+    await win.webContents.executeJavaScript("document.querySelector('.itabs [data-f=all]').click(); document.getElementById('hideBtn').click()");
+    await sleep(700);
+    fs.writeFileSync(path.join(CHECK, 'rest.png'), (await win.webContents.capturePage()).resize({ width: 1600 }).toPNG());
+  }
   win.destroy();
   srv.close();
 
@@ -133,7 +159,7 @@ app.whenReady().then(async () => {
   win.destroy();
   srv.close();
   srv = await server('cafe');
-  win = await open(`${srv.url}&mode=mini`, 440, 640);
+  win = await open(`${srv.url}&mode=mini`, 440, 396); // 보고함을 접은 기본 크기 (main.js의 POP_H.shut)
   await until(win, BUBBLE);
   await sleep(700);
   await save(win, 'popover.jpg');
@@ -146,6 +172,12 @@ app.whenReady().then(async () => {
   await win.webContents.insertCSS('*, *::before, *::after { animation: none !important; transition: none !important; }');
   await sleep(800);
   await save(win, 'setup.jpg');
+  if (CHECK)
+    for (const st of [1, 3, 4]) {
+      await win.webContents.executeJavaScript(`document.querySelector('#steps li[data-n="${st}"]').click()`);
+      await sleep(500);
+      fs.writeFileSync(path.join(CHECK, `setup${st}.png`), (await win.webContents.capturePage()).resize({ width: 900 }).toPNG());
+    }
   win.destroy();
   srv.close();
 
@@ -165,12 +197,13 @@ app.whenReady().then(async () => {
     .tb { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #ECE8E1; font-size: 12.5px; color: #555; }
     .tb i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; } .tb span { margin-left: 8px; }
     .win img { display: block; width: 1000px; }
+    .tl { position: absolute; left: 14px; top: 15px; display: flex; gap: 6px; } .tl i { width: 9px; height: 9px; border-radius: 50%; }
     .pop { position: absolute; top: 44px; right: 150px; width: 440px; border-radius: 14px; overflow: hidden; box-shadow: 0 34px 80px rgba(0,0,0,.5); }
     .pop img { display: block; width: 440px; }
   </style></head><body>
     <div class="bar"><b>Finder</b><span>파일</span><span>편집</span><span>보기</span><span>이동</span><span>윈도우</span><span class="sp"></span>
       <span class="tray"><img src="${url(path.join(ROOT, 'assets', 'trayTemplate@2x.png'))}" alt="">2</span><span>🔋</span><span>오후 9:41</span></div>
-    <div class="win"><div class="tb"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span>에이전트 작업실</span></div><img src="${url(path.join(DOCS, 'office.jpg'))}"></div>
+    <div class="win"><div class="tl"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div><img src="${url(path.join(DOCS, 'office.jpg'))}"></div>
     <div class="pop"><img src="${url(path.join(DOCS, 'popover.jpg'))}"></div>
   </body></html>`;
   const tmp = path.join(os.tmpdir(), 'agent-office-hero.html');

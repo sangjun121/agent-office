@@ -16,14 +16,14 @@ export const HAIR_COLORS = [
 
 // 모양 고르기 (칸 이름 → 선택지)
 export const LOOK_PARTS = {
-  hair: { label: '머리', options: { short: '짧은 머리', bob: '단발', bun: '똥머리', curly: '곱슬', ponytail: '포니테일', bowl: '바가지 머리', none: '민머리' } },
+  hair: { label: '머리', options: { short: '짧은 머리', bob: '단발', bun: '똥머리', curly: '곱슬', ponytail: '포니테일', bowl: '바가지 머리', quiff: '올림머리', none: '민머리' } },
   hat: {
     label: '모자·장식',
     options: { none: '없음', beanie: '비니', cap: '캡모자', phones: '헤드폰', cat: '고양이 귀', ribbon: '리본', sprout: '새싹', ahoge: '더듬이', crown: '왕관' },
   },
   face: { label: '표정', options: { smile: '방긋', wink: '윙크', cat: '고양이 입', wow: '깜짝', calm: '덤덤', sleepy: '졸림', blank: '멍', tongue: '메롱', uneven: '짝눈' } },
   glasses: { label: '안경·얼굴', options: { none: '없음', round: '동그란 안경', square: '네모 안경', sun: '선글라스', bandaid: '반창고', snot: '콧물' } },
-  top: { label: '옷', options: { jacket: '과잠', hoodie: '후드티', tee: '티셔츠', shirt: '셔츠' } },
+  top: { label: '옷', options: { jacket: '과잠', hoodie: '후드티', tee: '티셔츠', shirt: '셔츠', jersey: '축구 유니폼' } },
   neck: { label: '목', options: { none: '없음', scarf: '목도리', bow: '나비넥타이' } },
   bag: { label: '가방', options: { none: '없음', backpack: '백팩', cross: '크로스백' } },
 };
@@ -65,6 +65,14 @@ export function bamtiLook() {
   l.top = pick(['tee', 'hoodie', 'jacket']);
   l.neck = pick(['none', 'scarf', 'none']);
   return l;
+}
+
+// 호날두 조합: 빨간 7번 유니폼에 올림머리
+export function starLook() {
+  return {
+    skin: '#F6CBA6', hairColor: '#2B2422', cloth: '#E5484D', accent: '#F7F5F0',
+    hair: 'quiff', hat: 'none', face: 'smile', glasses: 'none', top: 'jersey', neck: 'none', bag: 'none',
+  };
 }
 
 export function normalizeLook(l) {

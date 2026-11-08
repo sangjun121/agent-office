@@ -4,6 +4,7 @@
 const path = require('node:path');
 const { app, BrowserWindow, Notification, shell, Tray, Menu, nativeImage, screen, session } = require('electron');
 const { startServer } = require('./server.js');
+const { getAppIcons } = require('./appicons.js');
 
 let tray = null;
 let pop = null; // 상단바에서 펼치는 작은 창
@@ -14,6 +15,12 @@ let setupUrl = '';
 let srv = null;
 let hiddenAt = 0;
 let lastUnread = 0;
+let popPinned = false; // 고정하면 다른 곳을 눌러도 작은 창이 안 닫힌다
+let pinPos = null; // 고정한 채 끌어서 옮겨 둔 자리
+const POP_W = 440;
+const POP_H = { open: 640, shut: 396 }; // 작은 창 높이: 보고함을 펼쳤을 때 / 접었을 때
+// 상단바 아이콘의 고유 값. ⌘ 키로 끌어 옮긴 아이콘 자리를 macOS가 다음 실행에도 기억한다
+const TRAY_GUID = '6c1f7f0e-3b9d-4a57-9e43-6d8a2f5b1c90';
 
 app.setName('에이전트 작업실');
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -30,7 +37,7 @@ function openLinksOutside(w) {
 function createTray() {
   const img = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'));
   img.setTemplateImage(true);
-  tray = new Tray(img);
+  tray = new Tray(img, TRAY_GUID);
   tray.setToolTip('에이전트 작업실 · 오른쪽 클릭하면 메뉴');
   tray.on('click', togglePopover);
   tray.on('right-click', showMenu);
@@ -41,7 +48,8 @@ function showMenu() {
     Menu.buildFromTemplate([
       { label: '작업실 펼치기', click: showPopover },
       { label: '크게 보기', click: showWindow },
-      { label: '에이전트 연동 설정…', click: () => showSetup(2) },
+      { label: '에이전트 연동 설정…', click: () => openSetupInApp(2) },
+      { label: '튜토리얼 다시 보기', click: () => openSetupInApp(1) },
       { type: 'separator' },
       {
         label: '맵',
@@ -56,6 +64,7 @@ function showMenu() {
         checked: !!srv?.getSettings().hideResting,
         click: (i) => srv?.setSettings({ hideResting: i.checked }),
       },
+      { label: '작은 창 고정하기', type: 'checkbox', checked: popPinned, click: (i) => srv?.setSettings({ pinPopover: i.checked }) },
       { type: 'separator' },
       { label: '로그인할 때 자동으로 열기', type: 'checkbox', checked: login, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
       { type: 'separator' },
@@ -71,13 +80,15 @@ function setUnread(n) {
 
 // ---------- 펼치는 창 ----------
 function createPopover() {
+  const s = srv?.getSettings() || {};
+  popPinned = !!s.pinPopover;
   pop = new BrowserWindow({
-    width: 440,
-    height: 640,
+    width: POP_W,
+    height: s.miniInbox ? POP_H.open : POP_H.shut,
     show: false,
     frame: false,
     resizable: false,
-    movable: false,
+    movable: popPinned,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -90,26 +101,61 @@ function createPopover() {
   pop.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   openLinksOutside(pop);
   pop.on('blur', () => {
-    if (pop.webContents.isDevToolsOpened()) return;
+    if (popPinned || pop.webContents.isDevToolsOpened()) return;
     pop.hide();
     hiddenAt = Date.now();
+  });
+  pop.on('moved', () => {
+    if (popPinned) pinPos = pop.getPosition();
   });
   pop.loadURL(`${baseUrl}&mode=mini`);
 }
 function positionPopover() {
   const tb = tray.getBounds();
   const wb = pop.getBounds();
-  const area = screen.getDisplayNearestPoint({ x: Math.round(tb.x), y: Math.round(tb.y) }).workArea;
-  let x = Math.round(tb.x + tb.width / 2 - wb.width / 2);
+  // 아이콘이 상단바에서 밀려나 자리를 알 수 없으면, 커서가 있는 화면의 오른쪽 위에 띄운다
+  const known = tb.width > 0 && tb.height > 0;
+  const area = screen.getDisplayNearestPoint(known ? { x: Math.round(tb.x), y: Math.round(tb.y) } : screen.getCursorScreenPoint()).workArea;
+  let x = known ? Math.round(tb.x + tb.width / 2 - wb.width / 2) : area.x + area.width - wb.width;
   x = Math.max(area.x + 8, Math.min(x, area.x + area.width - wb.width - 8));
-  const y = Math.max(area.y + 4, Math.round(tb.y + tb.height + 6));
+  const y = known ? Math.max(area.y + 4, Math.round(tb.y + tb.height + 6)) : area.y + 6;
   pop.setPosition(x, y, false);
+}
+function placePopover() {
+  // 고정한 채 옮겨 둔 자리가 있으면 그 자리에 (화면 밖으로 나가지 않게)
+  if (popPinned && pinPos) {
+    const b = pop.getBounds();
+    const area = screen.getDisplayMatching({ x: pinPos[0], y: pinPos[1], width: b.width, height: b.height }).workArea;
+    const x = Math.max(area.x, Math.min(pinPos[0], area.x + area.width - b.width));
+    const y = Math.max(area.y, Math.min(pinPos[1], area.y + area.height - 80));
+    return pop.setPosition(x, y, false);
+  }
+  positionPopover();
 }
 function showPopover() {
   if (!pop) createPopover();
-  positionPopover();
+  placePopover();
   pop.show();
   pop.focus();
+}
+// 화면이나 상단바 메뉴에서 설정을 바꾸면 작은 창에 바로 반영한다 (고정, 보고함 펼치기)
+function applyPopSettings(s) {
+  const pinned = !!s.pinPopover;
+  if (pinned !== popPinned) {
+    popPinned = pinned;
+    pinPos = null;
+    if (pop) {
+      pop.setMovable(pinned);
+      if (!pinned && pop.isVisible()) positionPopover();
+    }
+  }
+  if (!pop) return;
+  const h = s.miniInbox ? POP_H.open : POP_H.shut;
+  const b = pop.getBounds();
+  if (b.height === h) return;
+  const area = screen.getDisplayMatching(b).workArea;
+  const y = Math.max(area.y, Math.min(b.y, area.y + area.height - h - 8));
+  pop.setBounds({ x: b.x, y, width: b.width, height: h }, pop.isVisible());
 }
 function togglePopover() {
   // 창이 열린 채로 아이콘을 누르면 blur로 먼저 닫히니까, 방금 닫혔으면 다시 열지 않는다
@@ -157,16 +203,26 @@ function showSetup(step = 1) {
   setupWin.loadURL(url);
   updateDock();
 }
+// 처음 설정을 마친 뒤에는 새 창 대신 큰 창 안 팝업으로 연다
+function openSetupInApp(step) {
+  if (!srv?.getSettings().setupDone) return showSetup(step);
+  showWindow({ setup: step });
+}
 function finishSetup() {
   setupWin?.close();
   setTimeout(showPopover, 300);
 }
 
-function showWindow() {
+// look: true → 큰 창에서 캐릭터 꾸미기까지 연다, setup: 단계 → 큰 창 안 팝업으로 튜토리얼/연동 설정 (작은 창은 좁다)
+function showWindow(opts) {
+  const look = opts?.look === true;
+  const setup = Number(opts?.setup) || 0;
   pop?.hide();
   if (win) {
     win.show();
     win.focus();
+    if (look) win.webContents.executeJavaScript('window.openLookFromMain && window.openLookFromMain()').catch(() => {});
+    if (setup) win.webContents.executeJavaScript(`window.openSetupFromMain && window.openSetupFromMain(${setup})`).catch(() => {});
     return;
   }
   win = new BrowserWindow({
@@ -175,6 +231,8 @@ function showWindow() {
     minWidth: 900,
     minHeight: 600,
     title: '에이전트 작업실',
+    titleBarStyle: 'hiddenInset', // 얇은 macOS 제목 막대 없이, 신호등 버튼만 장면 위에
+    trafficLightPosition: { x: 18, y: 20 },
     backgroundColor: '#16302B',
     show: false,
     webPreferences,
@@ -185,11 +243,21 @@ function showWindow() {
     win = null;
     updateDock();
   });
-  win.loadURL(baseUrl);
+  win.loadURL(look ? `${baseUrl}&open=look` : setup ? `${baseUrl}&open=setup&step=${setup}` : baseUrl);
   updateDock();
 }
 
 app.on('second-instance', showPopover);
+// 이미 켜져 있는데 Finder나 Spotlight에서 다시 열면 큰 창을 띄운다 (상단바 아이콘이 가려져 있어도 볼 수 있게)
+app.on('activate', () => {
+  if (!baseUrl) return;
+  if (setupWin) {
+    setupWin.show();
+    setupWin.focus();
+    return;
+  }
+  showWindow();
+});
 
 app.whenReady().then(async () => {
   app.dock?.hide();
@@ -197,6 +265,8 @@ app.whenReady().then(async () => {
     settingsPath: path.join(app.getPath('userData'), 'settings.json'),
     openSetup: showSetup,
     onSetupDone: finishSetup,
+    onSettings: applyPopSettings,
+    getAppIcons,
     getLoginItem: () => app.getLoginItemSettings().openAtLogin,
     setLoginItem: (on) => {
       try {
@@ -228,6 +298,8 @@ app.whenReady().then(async () => {
   setUnread(lastUnread);
   // 처음 켰으면 설정부터
   if (!srv.getSettings().setupDone) showSetup(1);
+  // 로그인 자동 실행이 아니라 직접 켰으면, 어디 있는지 보이게 작은 창을 한 번 펼친다
+  else if (!app.getLoginItemSettings().wasOpenedAtLogin) setTimeout(showPopover, 700);
 });
 
 // 창을 다 닫아도 상단바에 남는다
