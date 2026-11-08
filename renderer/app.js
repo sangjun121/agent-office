@@ -86,10 +86,11 @@ let VB = viewBox();
 
 // ---------- 장면 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, MINI ? 2 : 1.5)); // 큰 창은 1.5배까지만 (렉 방지)
 renderer.setSize(VB.w, VB.h);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false; // 그림자는 frame()에서 두 번에 한 번만 다시 그린다
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.domElement.id = 'stage';
@@ -144,7 +145,21 @@ function makeLabel(kind) {
 function place(lbl, x, y, z) {
   _v.set(x, y, z).project(camera);
   const vis = _v.z < 1 && _v.z > -1 && Math.abs(_v.x) < 1.15 && Math.abs(_v.y) < 1.15;
-  if (vis) lbl.el.style.transform = `translate(${(_v.x * 0.5 + 0.5) * VB.w}px, ${(-_v.y * 0.5 + 0.5) * VB.h}px) translate(-50%, -100%)`;
+  const sy = (-_v.y * 0.5 + 0.5) * VB.h;
+  if (vis) {
+    // 위치가 그대로면 건드리지 않는다 (0.5px 단위로 맞춰서 쓸데없는 다시 그리기를 줄인다)
+    const tf = `translate(${Math.round((_v.x * 0.5 + 0.5) * VB.w * 2) / 2}px, ${Math.round(sy * 2) / 2}px) translate(-50%, -100%)`;
+    if (lbl.tf !== tf) {
+      lbl.tf = tf;
+      lbl.el.style.transform = tf;
+    }
+  }
+  // 머리줄 아래에서 서서히 나타나게 (이름표 아래 끝이 위쪽 100px 안이면 흐리게)
+  const op = sy < 100 ? Math.max(0, Math.min(1, (sy - 60) / 40)) : 1;
+  if (lbl.op !== op) {
+    lbl.op = op;
+    lbl.el.style.opacity = op;
+  }
   if (lbl.vis !== vis) {
     lbl.vis = vis;
     lbl.el.style.visibility = vis ? 'visible' : 'hidden';
@@ -254,7 +269,7 @@ const BOSS_DEFAULT = {
 };
 let bossLook = normalizeLook(settings.bossLook || BOSS_DEFAULT);
 const me = {
-  av: new Avatar(bossLook),
+  av: new Avatar(bossLook, { shadow: false, blob: true }),
   lbl: makeLabel('boss'),
   x: BOSS_SEAT.x,
   z: BOSS_SEAT.z,
@@ -424,7 +439,7 @@ function lookFor(id) {
   return normalizeLook(l);
 }
 function makeAgent(d) {
-  const av = new Avatar(lookFor(d.id));
+  const av = new Avatar(lookFor(d.id), { shadow: false, blob: true }); // 캐릭터는 동그란 그림자 (렉 방지)
   scene.add(av.root);
   const type = ['claude', 'codex', 'gemini'].includes(d.type) ? d.type : 'agent';
   const a = {
@@ -1462,8 +1477,20 @@ function updateLabels(now) {
     }
   }
 }
-function frame() {
+// 렉 방지: 창을 보고 있고 뭔가 움직일 때만 1초에 60번, 가만히 있으면 24번, 다른 앱을 쓰는 중이면 12번 그린다
+let lastDraw = 0;
+let drawNo = 0;
+let focused = document.hasFocus();
+addEventListener('focus', () => (focused = true));
+addEventListener('blur', () => (focused = false));
+const lively = () => keys.size > 0 || me.moving > 0 || me.y > 0 || [...agents.values()].some((a) => a.mode === 'walk' || a.role === 'report');
+function frame(now = performance.now()) {
   requestAnimationFrame(frame);
+  const fps = !focused ? 12 : lively() ? 60 : 24;
+  if (now - lastDraw < 1000 / fps - 4) return;
+  lastDraw = now;
+  // 그림자는 가구만 만든다 (캐릭터는 동그란 그림자) → 가끔만 다시 그리면 된다
+  if (drawNo++ % 60 === 0 || Math.abs(cam.yaw - cam.yawT) > 0.002) renderer.shadowMap.needsUpdate = true; // 카메라를 돌리는 동안은 바로바로
   const dt = Math.min(0.05, clock.getDelta());
   t += dt;
   updateMe(dt);
@@ -1508,6 +1535,7 @@ function frame() {
 }
 
 updateCamera(0.016);
+renderer.shadowMap.needsUpdate = true;
 renderer.render(scene, camera);
 requestAnimationFrame(frame);
 setTimeout(() => $('loading').classList.add('done'), 150);

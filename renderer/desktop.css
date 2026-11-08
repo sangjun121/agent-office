@@ -283,10 +283,6 @@ body:not(.mini) #topBar {
   border-bottom: 0; box-shadow: none;
 }
 body:not(.mini) #scene, body:not(.mini) #labels { top: 0; }
-#labels {
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, transparent 42px, #000 72px);
-  mask-image: linear-gradient(180deg, transparent 0, transparent 42px, #000 72px);
-}
 body:not(.mini) #placeBadge b { color: #FFF6E8; text-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 body:not(.mini) #placeHud .chip.stat, body:not(.mini) #topRight .chip { background: rgba(255, 252, 246, .92); box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
 body:not(.mini) #topRight button.chip:hover, body:not(.mini) #mapChip:hover { background: #fff; }
@@ -371,3 +367,6 @@ body.mini #restList { max-height: 190px; }
 .pchk { display: flex; align-items: center; gap: 6px; color: #4B5452; font-size: 13px; cursor: pointer; }
 #restGo:disabled { opacity: .45; cursor: default; }
 .popt { display: flex; align-items: center; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--line); color: #4B5452; font-size: 12.5px; cursor: pointer; }
+
+/* 렉 방지: 이름표마다 따로 겹을 만들어, 움직여도 창 전체를 다시 칠하지 않게 */
+#labels .lbl { will-change: transform; }

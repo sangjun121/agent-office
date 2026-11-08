@@ -114,6 +114,7 @@ function startServer({
   onSetupDone,
   onSettings,
   getAppIcons,
+  isViewing, // 작업실 창이 열려 있는지 (닫혀 있으면 덜 자주 확인)
   getLoginItem,
   setLoginItem,
   fixture,
@@ -131,6 +132,7 @@ function startServer({
   const staff = createStaff({ get: () => settings.staff, save: () => saveSettings() });
   const watcher = createWatcher({
     fixture,
+    interval: () => (!isViewing || isViewing() ? 2000 : 5000),
     getSettings: () => settings,
     onReport: (r, unread) => {
       if (settings.notify !== false) notify?.(r);

@@ -267,6 +267,7 @@ app.whenReady().then(async () => {
     onSetupDone: finishSetup,
     onSettings: applyPopSettings,
     getAppIcons,
+    isViewing: () => !!(pop?.isVisible() || win?.isVisible() || setupWin?.isVisible()),
     getLoginItem: () => app.getLoginItemSettings().openAtLogin,
     setLoginItem: (on) => {
       try {

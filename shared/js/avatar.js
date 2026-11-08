@@ -30,6 +30,8 @@ function M(color, extra) {
   return m;
 }
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
+const BLOB_GEO = new THREE.CircleGeometry(0.27, 24);
+const BLOB_MAT = new THREE.MeshBasicMaterial({ color: '#2A2016', transparent: true, opacity: 0.2, depthWrite: false });
 
 let laptopScreenTex = null;
 let stickerTex = null;
@@ -215,13 +217,21 @@ function drawFace(g, expr, mode) {
 export const EMOTE_DUR = { wave: 1.7, heart: 1.8, sip: 1.5, boom: 0.9, salute: 1.8 };
 
 export class Avatar {
-  constructor(look, { shadow = true } = {}) {
+  // blob: 실시간 그림자 대신 발밑에 옅은 동그란 그림자 (캐릭터가 많아도 가볍다)
+  constructor(look, { shadow = true, blob = false } = {}) {
     sharedTextures();
     this.root = new THREE.Group();
     this.pose = new THREE.Group();
     this.body = new THREE.Group();
     this.root.add(this.pose);
     this.pose.add(this.body);
+    if (blob) {
+      const disc = new THREE.Mesh(BLOB_GEO, BLOB_MAT);
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.012;
+      disc.renderOrder = -1;
+      this.root.add(disc);
+    }
     this.shadow = shadow;
 
     this.torso = this.mesh(G.torso, null, this.body);

@@ -233,7 +233,16 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
   }
 
   poll();
-  const timer = setInterval(poll, interval);
+  // interval: 숫자나 함수 (함수면 매번 물어본다: 창이 열려 있으면 자주, 닫혀 있으면 가끔)
+  let timer = null;
+  const every = () => (typeof interval === 'function' ? interval() : interval);
+  const tick = () => {
+    timer = setTimeout(() => {
+      poll();
+      tick();
+    }, every());
+  };
+  tick();
 
   return {
     state,
@@ -290,7 +299,7 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
       return !!p && state.agents.some((a) => a.worktree.path === p);
     },
     stop() {
-      clearInterval(timer);
+      clearTimeout(timer);
     },
   };
 }
