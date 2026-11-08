@@ -1,0 +1,103 @@
+{
+  "name": "agent-office",
+  "productName": "Agent Office",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orca, Claude Code, Codex에서 돌린 AI 에이전트가 3D 작업실에서 일하다가 끝나면 보고하러 오는 macOS 상단바 앱",
+  "author": "조상준",
+  "homepage": "https://github.com/sangjun121/agent-office",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web": "node server.js",
+    "art": "electron scripts/make-art.js",
+    "shots": "electron scripts/screenshots.js",
+    "predist": "node scripts/prepare.js",
+    "dist": "electron-builder --mac --arm64",
+    "postdist": "node scripts/set-dmg-icon.js"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "app.agentoffice.desktop",
+    "productName": "Agent Office",
+    "copyright": "© 2026 조상준",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "orca.js",
+      "server.js",
+      "sources.js",
+      "package.json",
+      "renderer/**/*",
+      "shared/**/*",
+      "assets/**/*",
+      "!node_modules/three/src/**",
+      "!node_modules/three/docs/**",
+      "!node_modules/three/editor/**",
+      "!node_modules/three/manual/**",
+      "!node_modules/three/examples/fonts/**",
+      "!node_modules/three/examples/models/**",
+      "!node_modules/three/examples/textures/**",
+      "!node_modules/three/examples/screenshots/**",
+      "!node_modules/three/examples/sounds/**"
+    ],
+    "asar": true,
+    "artifactName": "agent-office-${version}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "LSUIElement": true,
+        "CFBundleDisplayName": "에이전트 작업실"
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Agent Office ${version}",
+      "icon": "build/icon.icns",
+      "background": "build/background.png",
+      "iconSize": 100,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 202,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 202,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}

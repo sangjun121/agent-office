@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-LISC2v1R94i6G5TO2ZfX7kL9O6LzktVbLzzZapzId28='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' data: blob:; object-src 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>에이전트 작업실</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app/fonts/fonts.css">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/app/desktop.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
+<script type="module" src="/app/app.js"></script>
+</head>
+<body>
+
+<div id="scene"></div>
+<div id="labels"></div>
+<div id="loading"><div class="lcard"><div class="lspin" aria-hidden="true"></div><b>작업실 불 켜는 중…</b><small>에이전트들이 자리 잡고 있어요</small></div></div>
+
+<!-- 상단바에서 펼쳤을 때 쓰는 머리줄 -->
+<header id="miniHead">
+  <b class="mtitle">에이전트 작업실</b>
+  <span class="mstat" id="mWork" title="일하는 중">🛠 <b>0</b></span>
+  <span class="mstat warn" id="mAttn" title="확인 필요">❗ <b>0</b></span>
+  <span class="mstat ok" id="mDone" title="오늘 끝남">✅ <b>0</b></span>
+  <button type="button" class="mbtn" id="mHide" title="쉬는 에이전트 숨기기" aria-pressed="false">💤</button>
+  <button type="button" class="mbtn" id="bigBtn" title="크게 보기">⤢</button>
+  <button type="button" class="mbtn" id="menuBtn" title="메뉴">⋯</button>
+</header>
+<div class="hud" id="placeHud">
+  <div class="chip" id="placeBadge"><b>에이전트 작업실</b><span>Orca · Claude · Codex 에이전트가 끝나면 보고하러 와요</span></div>
+</div>
+<div class="hud" id="topRight">
+  <div class="chip stat" id="cWork" title="지금 일하는 에이전트">🛠 <b>0</b> 일하는 중</div>
+  <div class="chip stat warn" id="cAttn" title="답이나 허락을 기다리는 에이전트">❗ <b>0</b> 확인 필요</div>
+  <div class="chip stat ok" id="cDone" title="오늘 끝난 일">✅ <b>0</b> 오늘 끝남</div>
+  <div class="chip off" id="conn">살펴보는 중…</div>
+  <label class="chip" id="mapChip" title="맵 바꾸기">🗺 <select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option></select></label>
+  <button type="button" class="chip" id="hideBtn" aria-pressed="false">💤 쉬는 에이전트 보기</button>
+</div>
+<div id="hint"><kbd>←↑↓→</kbd> 걷기 · <kbd>Shift</kbd> 달리기 · <kbd>Space</kbd> 점프 · <kbd>F</kbd> 앉기 · <kbd>G</kbd> 종이 총 · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 인사·하트·춤 · <kbd>C</kbd> 폭죽 · 캐릭터를 누르면 지금 하는 일</div>
+<div id="miniHint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · <kbd>G</kbd> 종이 총</div>
+<button id="act" class="btn" type="button" hidden><span></span><kbd>F</kbd></button>
+<div class="hud" id="skills" role="group" aria-label="내 캐릭터">
+  <button class="skill" type="button" data-skill="wave"><kbd>1</kbd>인사</button>
+  <button class="skill" type="button" data-skill="heart"><kbd>2</kbd>하트</button>
+  <button class="skill" type="button" data-skill="dance"><kbd>3</kbd>춤</button>
+  <button class="skill" type="button" data-skill="boom"><kbd>C</kbd>폭죽</button>
+  <button class="skill" type="button" data-skill="gun"><kbd>G</kbd>종이 총</button>
+  <button class="skill" type="button" data-skill="jump"><kbd>Space</kbd>점프</button>
+  <button class="skill" type="button" id="runBtn" aria-pressed="false"><kbd>Shift</kbd>달리기</button>
+</div>
+<div id="toasts" aria-live="polite"></div>
+
+<!-- 보고함 -->
+<aside id="inbox" aria-label="보고함">
+  <header class="ihead">
+    <h3>📬 보고함 <b id="unreadCnt"></b></h3>
+    <button type="button" class="btn ghost sm" id="demoBtn" title="연습용 에이전트가 일하다가 보고하러 와요">🧪 연습</button>
+    <button type="button" class="btn ghost sm" id="readAll">모두 읽음</button>
+    <button type="button" class="x" id="inboxHide" aria-label="보고함 접기">›</button>
+  </header>
+  <div class="itabs" role="tablist">
+    <button type="button" data-f="all" aria-selected="true">전체</button>
+    <button type="button" data-f="unread" aria-selected="false">안 읽음</button>
+    <button type="button" data-f="attention" aria-selected="false">확인 필요</button>
+  </div>
+  <ol id="inboxList"></ol>
+</aside>
+<button type="button" class="chip" id="inboxShow" hidden>📬 보고함 <b id="unreadCnt2"></b></button>
+
+<!-- 캐릭터 카드 -->
+<div id="card" hidden><div class="chead"><i class="cdot"></i><b class="cname"></b><button type="button" class="x" id="cardClose" aria-label="닫기">×</button></div><p class="cstat"></p><p class="cbody"></p><div class="cbtns"></div></div>
+
+<!-- 보고 자세히 -->
+<div id="report" class="modal" hidden><div class="box rbox" role="dialog" aria-labelledby="rTitle">
+  <div class="rhead"><span class="ricon" id="rIcon"></span><div class="rtitle"><h4 id="rTitle"></h4><p id="rMeta"></p></div><button type="button" class="x" id="rClose" aria-label="닫기">×</button></div>
+  <section><h5>받은 일</h5><p id="rPrompt"></p></section>
+  <section><h5 id="rMsgTitle">보고</h5><p id="rMessage"></p><small id="rNote"></small></section>
+  <div class="rbtns"><button type="button" class="btn ghost" id="rFolder">📁 폴더 열기</button><button type="button" class="btn ghost" id="rOrca">앱 열기</button><button type="button" class="btn" id="rOk">확인</button></div>
+</div></div>
+
+<div class="hud" id="camBtns">
+  <button type="button" class="chip" id="setupBtn" title="연동할 에이전트 앱 고르기">⚙︎ 연동 설정</button>
+  <button type="button" class="chip" id="lookBtn">🎨 내 캐릭터</button>
+  <button type="button" class="chip" id="soundBtn" aria-pressed="true">🔔</button>
+  <button type="button" class="chip" id="rotL" aria-label="왼쪽으로 돌리기">⟲</button>
+  <button type="button" class="chip" id="rotR" aria-label="오른쪽으로 돌리기">⟳</button>
+</div>
+
+<!-- 캐릭터 꾸미기 -->
+<section id="avPanel" hidden aria-label="내 캐릭터 꾸미기">
+  <div class="avhead"><h4>내 캐릭터 꾸미기</h4><button type="button" class="btn ghost" id="avBamti" title="어설프고 정감 가는 조합">🌰 밤티</button><button type="button" class="btn ghost" id="avRandom">🎲 랜덤</button><button type="button" class="btn" id="avDone">완료</button></div>
+  <div id="avBody"></div>
+</section>
+<div id="avPreview" hidden><canvas id="avCanvas" width="240" height="280"></canvas><small>미리보기 · 끌어서 돌려 보기</small></div>
+
+</body>
+</html>

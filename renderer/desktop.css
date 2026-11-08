@@ -1,0 +1,141 @@
+/* 에이전트 작업실: 공통 스타일(shared/css/style.css) 위에 얹는 것들 */
+#topRight .stat b { font-weight: 800; margin: 0 2px; }
+#topRight .stat.warn b { color: #D9373D; }
+#topRight .stat.ok b { color: #2E8B57; }
+#topRight .stat.zero { opacity: .6; }
+#conn::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--mint); vertical-align: 1px; }
+#conn.off::before { background: #E5484D; }
+
+.btn.sm { padding: 5px 10px; font-size: 14px; }
+
+/* 이름표 */
+.tag.t-claude { background: rgba(193, 95, 60, .9); }
+.tag.t-codex { background: rgba(40, 54, 107, .9); }
+.tag.t-gemini { background: rgba(110, 76, 190, .9); }
+.tag.boss { background: var(--accent); }
+.lbl .sub {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 252, 246, .92);
+  color: var(--ink);
+  font: 600 11.5px/1.5 var(--body);
+  box-shadow: var(--shadow-sm);
+}
+.lbl .sub:empty { display: none; }
+.lbl .sub.attn { background: #FFE1DE; color: #B42318; animation: attn 1.1s ease-in-out infinite; }
+@keyframes attn { 50% { transform: scale(1.06); } }
+.bub.report { border-left: 3px solid #3FA66B; max-width: 280px; }
+
+/* 보고함 */
+#inbox {
+  position: fixed; z-index: 8;
+  top: 62px; right: 12px; bottom: 64px;
+  width: 340px;
+  display: flex; flex-direction: column;
+  border-radius: 18px;
+  background: rgba(255, 252, 246, .96);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform .25s ease, opacity .25s;
+}
+#inbox.collapsed { transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none; }
+.ihead { display: flex; align-items: center; gap: 6px; padding: 10px 10px 6px 14px; }
+.ihead h3 { flex: 1; margin: 0; font: 20px var(--hand); }
+.ihead h3 b:not(:empty) { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #fff; font: 700 12px/20px var(--body); text-align: center; vertical-align: 2px; }
+.itabs { display: flex; gap: 4px; padding: 2px 10px 0; border-bottom: 1px solid var(--line); }
+.itabs button { flex: 1; padding: 6px 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: 600 13px var(--body); cursor: pointer; }
+.itabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+#inboxList { flex: 1; min-height: 0; margin: 0; padding: 6px 8px 10px; list-style: none; overflow-y: auto; }
+#inboxList li {
+  position: relative;
+  display: grid; grid-template-columns: auto 1fr; column-gap: 9px;
+  padding: 9px 10px 9px 8px; border-radius: 12px; cursor: pointer;
+}
+#inboxList li:hover { background: var(--card-2); }
+#inboxList li.unread { background: #FFF3EA; }
+#inboxList li.unread::after { content: ''; position: absolute; top: 14px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+#inboxList .ic { grid-row: span 3; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 10px; background: var(--card-2); font-size: 16px; }
+#inboxList li.k-attention .ic { background: #FFE1DE; }
+#inboxList li.k-done .ic { background: #DDF3E5; }
+#inboxList b { padding-right: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+#inboxList small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#inboxList p { margin: 3px 0 0; color: #4B5452; font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#inboxList .empty { display: block; padding: 30px 10px; color: var(--muted); text-align: center; cursor: default; font-size: 13px; line-height: 1.6; }
+#inboxList .empty:hover { background: none; }
+#inboxShow { position: fixed; z-index: 8; top: 62px; right: 12px; }
+#inboxShow b:not(:empty) { margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; }
+
+/* 캐릭터 카드 */
+#card { width: 280px; }
+#card .cbody { margin: -4px 0 10px; color: #4B5452; font-size: 12.5px; line-height: 1.5; max-height: 6em; overflow: hidden; white-space: pre-line; }
+#card .cbody:empty { display: none; }
+
+/* 보고 자세히 */
+.rbox { max-width: 560px; max-height: calc(100vh - 60px); display: flex; flex-direction: column; }
+.rhead { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.ricon { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 14px; background: #DDF3E5; font-size: 22px; }
+.ricon.k-attention { background: #FFE1DE; }
+.ricon.k-interrupted { background: #F1EDE4; }
+.rtitle { flex: 1; min-width: 0; }
+.rtitle h4 { margin: 0; font: 23px var(--hand); color: var(--green); }
+.rtitle p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+.rbox section { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card-2); overflow-y: auto; }
+.rbox section:last-of-type { flex: 1; min-height: 60px; }
+.rbox h5 { margin: 0 0 4px; color: var(--muted); font: 700 12px var(--body); }
+.rbox section p { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.6; -webkit-user-select: text; user-select: text; }
+.rbox small { display: block; margin-top: 6px; color: var(--muted); font-size: 11.5px; }
+.rbox small:empty { display: none; }
+.rbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+#hint { pointer-events: none; }
+#soundBtn[aria-pressed="false"] { opacity: .55; }
+@media (max-width: 1000px) {
+  #placeBadge span { display: none; }
+  #inbox { width: 300px; }
+}
+
+/* ---------- 상단바에서 펼친 작은 창 ---------- */
+#miniHead { display: none; }
+body.mini #placeHud, body.mini #topRight, body.mini #hint, body.mini #inboxShow, body.mini #inboxHide, body.mini #lookBtn, body.mini #setupBtn { display: none !important; }
+body.mini #miniHead {
+  display: flex; position: fixed; z-index: 9; top: 0; left: 0; right: 0; height: 44px;
+  align-items: center; gap: 6px; padding: 0 10px 0 14px;
+  background: rgba(255, 252, 246, .97); box-shadow: 0 2px 10px rgba(8, 20, 18, .18);
+  -webkit-app-region: drag;
+}
+body.mini #miniHead button { -webkit-app-region: no-drag; }
+.mtitle { flex: 1; font: 17px var(--hand); color: var(--green); white-space: nowrap; }
+.mstat { padding: 3px 8px; border-radius: 999px; background: var(--card-2); font: 700 12.5px var(--body); white-space: nowrap; }
+.mstat.warn b { color: #D9373D; }
+.mstat.ok b { color: #2E8B57; }
+.mstat.zero { opacity: .55; }
+.mbtn { width: 30px; height: 28px; border: 0; border-radius: 8px; background: var(--card-2); font-size: 15px; line-height: 1; cursor: pointer; }
+.mbtn:hover { background: #EFE7D8; }
+body.mini #scene, body.mini #labels { inset: auto; top: 44px; left: 0; right: 0; height: 300px; }
+body.mini #stage { position: absolute; }
+body.mini #inbox { top: 344px; left: 0; right: 0; bottom: 0; width: auto; max-height: none; border-radius: 16px 16px 0 0; }
+body.mini .ihead { padding-top: 8px; }
+body.mini .ihead h3 { font-size: 17px; }
+body.mini #camBtns { top: 302px; bottom: auto; right: 8px; gap: 4px; }
+body.mini #camBtns .chip { padding: 4px 8px; font-size: 13px; }
+body.mini #toasts { top: 56px; bottom: auto; width: calc(100% - 24px); flex-direction: column; }
+body.mini .tag { padding: 0 6px 1px; font-size: 11px; }
+body.mini .lbl .sub { font-size: 10px; padding: 0 6px; }
+body.mini .bub { max-width: 210px; padding: 4px 9px; font-size: 12px; }
+body.mini #card { width: 250px; }
+
+/* ---------- 내 캐릭터 조작 ---------- */
+#hint { transition: opacity .6s; }
+#miniHint { display: none; }
+body.mini #miniHint {
+  display: block; position: fixed; z-index: 6; top: 52px; left: 10px;
+  padding: 4px 9px; border-radius: 10px; background: rgba(15, 33, 30, .6); color: #EAF2EF;
+  font-size: 11px; pointer-events: none; transition: opacity .6s;
+}
+body.mini #miniHint kbd { min-width: 16px; font-size: 9.5px; line-height: 14px; padding: 0 3px; }
+body.mini #skills { display: none; }
+body.mini #act { top: 298px; bottom: auto; font-size: 14px; padding: 5px 11px; }
+#skills .skill[aria-pressed="true"] { background: var(--accent-weak); box-shadow: inset 0 0 0 2px var(--accent); }
+#mapChip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 11px; }
+#mapChip select { border: 0; background: transparent; font: 600 13.5px var(--body); color: var(--ink); cursor: pointer; outline: none; }
+#hideBtn[aria-pressed="true"], #mHide[aria-pressed="true"] { background: var(--accent-weak); box-shadow: inset 0 0 0 2px var(--accent); }

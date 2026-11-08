@@ -1,0 +1,13 @@
+/* 앱에 함께 담은 글꼴 (인터넷에서 받아 오지 않는다). 두 글꼴 모두 SIL Open Font License */
+@font-face {
+  font-family: "Jua";
+  src: url("./Jua-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pretendard Variable";
+  src: url("./PretendardVariable.woff2") format("woff2-variations");
+  font-weight: 45 920;
+  font-display: swap;
+}
