@@ -37,7 +37,7 @@
 
 ## 1. 설치하기
 
-1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.3.0-arm64.dmg`를 받아요.
+1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.3.1-arm64.dmg`를 받아요.
 2. DMG를 열고 **Agent Office**를 **Applications** 폴더로 끌어다 놓아요.
 3. 처음 열면 "Apple에서 확인할 수 없는 개발자" 경고가 떠요. 아직 Apple 공증을 받지 않은 앱이라서 그래요.
    - **시스템 설정 → 개인정보 보호 및 보안**으로 가서 아래쪽의 **그래도 열기**를 누르면 돼요.
@@ -50,7 +50,7 @@
 받은 파일이 릴리스에 올린 파일과 같은지 확인하고 싶다면, 아래 값을 릴리스의 `SHA256SUMS.txt`와 비교해 보세요.
 
 ```sh
-shasum -a 256 agent-office-0.3.0-arm64.dmg
+shasum -a 256 agent-office-0.3.1-arm64.dmg
 ```
 
 > Intel Mac용 파일은 아직 없어요. 필요하면 [직접 빌드하기](#직접-빌드하기)를 참고하세요.
@@ -152,7 +152,7 @@ shasum -a 256 agent-office-0.3.0-arm64.dmg
 | 방향키, WASD | 걷기 |
 | Shift | 달리기 |
 | Space | 점프 (공중에서 한 번 더) |
-| F, Enter | 앉기, 일어나기, 가까운 캐릭터 보기 |
+| F, Enter | 앉기, 일어나기, 가까운 캐릭터 보기, 공 차기 (축구장, Shift를 누른 채 차면 더 세게) |
 | V | 1인칭으로 보기 |
 | 1 / 2 / 3 | 인사 / 하트 / 춤 |
 | C | 폭죽 |
@@ -166,7 +166,7 @@ shasum -a 256 agent-office-0.3.0-arm64.dmg
 
 <table>
   <tr>
-    <td width="50%" valign="top"><img src="docs/stadium.jpg" alt="축구장 맵"><br><b>축구장</b><br>하얀 관중석이 둘러싼 그라운드예요. 에이전트는 기자석과 벤치에서 일하고, 쉬는 동안에는 그라운드에 나와 있어요. 나는 감독석에 앉고, 오늘의 작업 현황은 전광판에 떠요.</td>
+    <td width="50%" valign="top"><img src="docs/stadium.jpg" alt="축구장 맵"><br><b>축구장</b><br>하얀 관중석이 둘러싼 그라운드예요. 에이전트는 기자석과 벤치에서 일하고, 쉬는 동안에는 그라운드에 나와 있어요. 나는 감독석에 앉고, 오늘의 작업 현황은 전광판에 떠요. 가운데 공은 F로 차거나 걸어가서 밀 수 있고, 골대에 넣으면 폭죽이 터져요.</td>
     <td width="50%" valign="top"><img src="docs/paris.jpg" alt="파리 생제르맹 데프레 맵"><br><b>생제르맹 데프레</b><br>파리 생제르맹 데프레의 실제 거리 배치를 작게 옮겼어요. 생제르맹 대로, 종탑이 있는 성당과 그 앞 광장, 보나파르트 거리, 렌 거리가 시작되는 퀘벡 광장, 메트로 4호선 입구가 있어요. 에이전트는 카페 테라스에서 일하고 지하철로 출근해요.</td>
   </tr>
   <tr>

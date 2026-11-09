@@ -259,16 +259,13 @@ export function buildStadium(scene, { boardTexture } = {}) {
     net.position.set((gx + back) / 2, 0.36, cz);
     net.userData.keep = true;
     stat.add(net);
-    col(Math.min(gx, back) - 0.05, cz - 0.85, Math.max(gx, back) + 0.05, cz + 0.85);
+    colliders.push({ x0: Math.min(gx, back) - 0.05, z0: cz - 0.85, x1: Math.max(gx, back) + 0.05, z1: cz + 0.85, goal: true }); // 공은 골 입구로 들어간다
   }
   // 코너 깃발
   for (const [x, z] of [[P.x0, P.z0], [P.x1, P.z0], [P.x0, P.z1], [P.x1, P.z1]]) {
     cyl(stat, 0.012, 0.012, 0.6, x, 0, z, '#F2F2F2', { seg: 6, cast: false });
     box(stat, 0.01, 0.12, 0.16, x, 0.46, z + 0.08, '#E8C547', { r: 0, cast: false });
   }
-  // 센터 서클 위 공
-  ball(stat, 0.11, 8.0, 0.11, 6.0, '#FFFFFF');
-  for (const [dx, dz] of [[0.06, 0.03], [-0.05, 0.05], [0.0, -0.07]]) ball(stat, 0.035, 8.0 + dx, 0.17, 6.0 + dz, '#222428', { cast: false });
 
   // ---- 광고판 (북쪽 터치라인, 가운데는 통로) ----
   const ledTex = canvasTex(1024, 64, drawLed);
@@ -341,8 +338,167 @@ export function buildStadium(scene, { boardTexture } = {}) {
     mergeGroup(w.decor);
   }
 
+  // ---- 공: 걸어가서 밀거나 F로 찬다. 골대에 들어가면 골 ----
+  const BALL_R = 0.11;
+  const CZ = (P.z0 + P.z1) / 2;
+  const ballObj = new THREE.Group();
+  const skin = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 20, 14), new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.5 }));
+  ballObj.add(skin);
+  // 검은 무늬: 정이십면체 꼭짓점 12곳
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const patchGeo = new THREE.SphereGeometry(BALL_R * 0.3, 10, 8);
+  const patchMat = new THREE.MeshStandardMaterial({ color: '#1F2226', roughness: 0.6 });
+  for (const [a, b, c] of [[0, 1, phi], [0, -1, phi], [0, 1, -phi], [0, -1, -phi], [1, phi, 0], [-1, phi, 0], [1, -phi, 0], [-1, -phi, 0], [phi, 0, 1], [-phi, 0, 1], [phi, 0, -1], [-phi, 0, -1]]) {
+    const p = new THREE.Mesh(patchGeo, patchMat);
+    p.position.set(a, b, c).normalize().multiplyScalar(BALL_R * 0.82);
+    ballObj.add(p);
+  }
+  const ballShadow = new THREE.Mesh(new THREE.CircleGeometry(BALL_R * 1.15, 20), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.3, depthWrite: false }));
+  ballShadow.rotation.x = -PI / 2;
+  root.add(ballObj, ballShadow);
+  const B = { x: 8, z: CZ, y: BALL_R, vx: 0, vz: 0, vy: 0, goalAt: 0 };
+  // 공이 부딪히는 것: 관중석, 광고판, 책상들 + 골대 기둥과 그물 (골 입구는 비워 둔다)
+  const ballCols = colliders.filter((c) => !c.goal);
+  for (const side of [-1, 1]) {
+    const gx = side < 0 ? P.x0 : P.x1;
+    const back = gx + side * 0.5;
+    const xa = Math.min(gx, back);
+    const xb = Math.max(gx, back);
+    ballCols.push({ x0: xa, z0: CZ - 0.84, x1: xb, z1: CZ - 0.8 }, { x0: xa, z0: CZ + 0.8, x1: xb, z1: CZ + 0.84 });
+    ballCols.push({ x0: side < 0 ? back - 0.04 : back, z0: CZ - 0.84, x1: side < 0 ? back : back + 0.04, z1: CZ + 0.84, net: true });
+    ballCols.push({ x0: gx - 0.04, z0: CZ - 0.84, x1: gx + 0.04, z1: CZ - 0.76 }, { x0: gx - 0.04, z0: CZ + 0.76, x1: gx + 0.04, z1: CZ + 0.84 });
+  }
+  function collideBall() {
+    for (const c of ballCols) {
+      const cx = Math.max(c.x0, Math.min(B.x, c.x1));
+      const cz = Math.max(c.z0, Math.min(B.z, c.z1));
+      let nx = B.x - cx;
+      let nz = B.z - cz;
+      const d = Math.hypot(nx, nz);
+      if (d >= BALL_R) continue;
+      if (d < 1e-6) {
+        // 공 가운데가 상자 안이면 가장 가까운 면으로 꺼낸다
+        const pen = [[B.x - c.x0, -1, 0], [c.x1 - B.x, 1, 0], [B.z - c.z0, 0, -1], [c.z1 - B.z, 0, 1]].sort((p, q) => p[0] - q[0])[0];
+        nx = pen[1];
+        nz = pen[2];
+        B.x += nx * (pen[0] + BALL_R);
+        B.z += nz * (pen[0] + BALL_R);
+      } else {
+        nx /= d;
+        nz /= d;
+        B.x = cx + nx * BALL_R;
+        B.z = cz + nz * BALL_R;
+      }
+      const vn = B.vx * nx + B.vz * nz;
+      if (vn < 0) {
+        const e = c.net ? 0.1 : 0.55; // 그물은 공을 받아 준다
+        B.vx -= (1 + e) * vn * nx;
+        B.vz -= (1 + e) * vn * nz;
+        if (c.net) {
+          B.vx *= 0.4;
+          B.vz *= 0.4;
+        }
+      }
+    }
+  }
+  const _axis = new THREE.Vector3();
+  const ballApi = {
+    onGoal: null,
+    near: (x, z) => Math.hypot(B.x - x, B.z - z),
+    moving: () => Math.hypot(B.vx, B.vz) > 0.02 || B.y > BALL_R + 0.002,
+    place(x, z) {
+      Object.assign(B, { x, z, y: BALL_R, vx: 0, vz: 0, vy: 0, goalAt: 0 });
+    },
+    // 바라보는 쪽이 공 쪽이면 그쪽으로, 아니면 나에게서 공 쪽으로 찬다. strong이면 더 세게, 더 높이
+    kick(x, z, h, strong) {
+      let dx = B.x - x;
+      let dz = B.z - z;
+      const d = Math.hypot(dx, dz) || 1;
+      dx /= d;
+      dz /= d;
+      const fx = Math.sin(h);
+      const fz = Math.cos(h);
+      let kx = dx;
+      let kz = dz;
+      if (fx * dx + fz * dz > 0.3) {
+        kx = fx * 0.7 + dx * 0.3;
+        kz = fz * 0.7 + dz * 0.3;
+      }
+      const k = Math.hypot(kx, kz) || 1;
+      const sp = strong ? 9.5 : 6.5;
+      B.vx = (kx / k) * sp;
+      B.vz = (kz / k) * sp;
+      B.vy = strong ? 3.0 : 1.2;
+      B.y = Math.max(B.y, BALL_R + 0.002);
+    },
+    update(dt, bodies = []) {
+      dt = Math.min(dt, 0.05);
+      // 사람과 에이전트에 부딪히면 밀려난다
+      for (const b of bodies) {
+        const dx = B.x - b.x;
+        const dz = B.z - b.z;
+        const d = Math.hypot(dx, dz);
+        const minD = BALL_R + 0.26;
+        if (d >= minD || d < 1e-4 || B.y > 0.6) continue;
+        const nx = dx / d;
+        const nz = dz / d;
+        B.x = b.x + nx * minD;
+        B.z = b.z + nz * minD;
+        const vn = ((b.vx || 0) - B.vx) * nx + ((b.vz || 0) - B.vz) * nz;
+        if (vn > 0) {
+          B.vx += nx * vn * 1.5;
+          B.vz += nz * vn * 1.5;
+        }
+      }
+      // 공중이면 중력과 튀기, 땅에서는 굴러가며 서서히 멈춘다
+      if (B.y > BALL_R || B.vy > 0) {
+        B.vy -= 9.8 * dt;
+        B.y += B.vy * dt;
+        if (B.y <= BALL_R) {
+          B.y = BALL_R;
+          B.vy = Math.abs(B.vy) > 1 ? -B.vy * 0.45 : 0;
+          B.vx *= 0.88;
+          B.vz *= 0.88;
+        }
+      }
+      const fr = Math.exp(-(B.y > BALL_R + 0.01 ? 0.15 : 0.85) * dt);
+      B.vx *= fr;
+      B.vz *= fr;
+      if (Math.hypot(B.vx, B.vz) < 0.03 && B.y <= BALL_R) B.vx = B.vz = 0;
+      // 빠르면 잘게 나눠 움직여서 벽을 뚫지 않게
+      const sp = Math.hypot(B.vx, B.vz);
+      const steps = Math.max(1, Math.ceil((sp * dt) / 0.04));
+      for (let i = 0; i < steps; i++) {
+        B.x += (B.vx * dt) / steps;
+        B.z += (B.vz * dt) / steps;
+        collideBall();
+      }
+      // 골: 골라인을 다 넘고, 크로스바보다 낮게
+      if (!B.goalAt)
+        for (const side of [-1, 1]) {
+          const gx = side < 0 ? P.x0 : P.x1;
+          if ((side < 0 ? B.x < gx - BALL_R : B.x > gx + BALL_R) && Math.abs(B.z - CZ) < 0.8 && B.y < 0.72) {
+            B.goalAt = performance.now();
+            ballApi.onGoal?.(side, B.x, B.z);
+          }
+        }
+      if (B.goalAt && performance.now() - B.goalAt > 2600) ballApi.place(8, CZ);
+      // 보이기: 위치, 굴러간 만큼 돌리기, 그림자
+      ballObj.position.set(B.x, B.y, B.z);
+      if (sp > 0.001) {
+        _axis.set(B.vz, 0, -B.vx).normalize();
+        ballObj.rotateOnWorldAxis(_axis, (sp * dt) / BALL_R);
+      }
+      ballShadow.position.set(B.x, 0.004, B.z);
+      const lift = Math.max(0, B.y - BALL_R);
+      ballShadow.scale.setScalar(1 + lift * 0.8);
+      ballShadow.material.opacity = Math.max(0.08, 0.3 - lift * 0.25);
+    },
+  };
+  ballApi.update(0, []);
+
   const zones = [
-    { id: 'pitch', name: '그라운드', x0: P.x0, z0: P.z0, x1: P.x1, z1: P.z1, desc: '쉬는 에이전트들이 나와서 몸을 풀어요.' },
+    { id: 'pitch', name: '그라운드', x0: P.x0, z0: P.z0, x1: P.x1, z1: P.z1, desc: '공 가까이 가서 F를 누르면 찰 수 있어요. Shift를 누른 채 차면 더 세게 차요.' },
     { id: 'press', name: '기자석', x0: 1.3, z0: 1.3, x1: 14.7, z1: P.z0, desc: '그라운드를 보며 노트북을 펴는 자리예요.' },
     { id: 'bench', name: '벤치', x0: 1.3, z0: P.z1, x1: 12.9, z1: 10.9, desc: '감독석 옆 벤치에서도 일해요.' },
     { id: 'tunnel', name: '선수 입장 터널', x0: 12.9, z0: P.z1, x1: 14.7, z1: D, desc: '에이전트가 여기로 출근해요.' },
@@ -378,6 +534,7 @@ export function buildStadium(scene, { boardTexture } = {}) {
     walls,
     boardSurface,
     spawn: { x: 13.6, z: 10.6, h: PI },
+    ball: ballApi,
     update,
     setCut,
     toggleFridge: () => false,

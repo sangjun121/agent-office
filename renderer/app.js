@@ -417,6 +417,7 @@ let actKey = '';
 function nearestAct() {
   if (me.act === 'gun') return { kind: 'fire', label: '종이 총 발사' };
   if (me.st) return { kind: 'stand', label: '일어나기' };
+  if (room.ball && room.ball.near(me.x, me.z) < 0.75) return { kind: 'kick', label: '공 차기' }; // 축구장 공
   let best = null;
   let bd = Infinity;
   for (const s of room.seats) {
@@ -443,11 +444,40 @@ function interact() {
   if (it.kind === 'fire') fire();
   else if (it.kind === 'stand') meStand();
   else if (it.kind === 'seat') meSit(it.seat);
+  else if (it.kind === 'kick') kickBall();
   else if (it.kind === 'agent') {
     const p = projectToScreen(it.agent.x, 1.2, it.agent.z);
     showCard({ agent: it.agent }, p.x, p.y);
   }
 }
+// 축구장 공 차기: Shift를 누르고 있으면 더 세게, 더 높이
+function kickBall() {
+  room.ball.kick(me.x, me.z, me.h, keys.has('ShiftLeft') || keys.has('ShiftRight') || runToggle);
+  thump();
+}
+function thump() {
+  if (!soundOn) return;
+  try {
+    actx = actx || new AudioContext();
+    const t0 = actx.currentTime;
+    const o = actx.createOscillator();
+    o.frequency.setValueAtTime(150, t0);
+    o.frequency.exponentialRampToValueAtTime(55, t0 + 0.09);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.28, t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+    o.connect(g).connect(actx.destination);
+    o.start(t0);
+    o.stop(t0 + 0.18);
+  } catch {}
+}
+if (room.ball)
+  room.ball.onGoal = (side, x, z) => {
+    UI.toast('골!', '공은 곧 가운데로 돌아가요.', 2400);
+    for (let i = 0; i < 5; i++) setTimeout(() => fx.burst(x + (Math.random() - 0.5) * 1.4, 1.1 + Math.random() * 0.8, z + (Math.random() - 0.5) * 1.4, 40), i * 200);
+    chime();
+  };
 function projectToScreen(x, y, z) {
   _v.set(x, y, z).project(camera);
   return { x: VB.x + (_v.x * 0.5 + 0.5) * VB.w, y: VB.y + (-_v.y * 0.5 + 0.5) * VB.h };
@@ -1610,7 +1640,9 @@ const lively = () =>
   !!drag?.moved ||
   (fpv.t > 0 && fpv.t < 1) ||
   (fpv.on && Math.abs(fpv.yaw - fpv.yawT) > 0.001) ||
+  !!room.ball?.moving() ||
   [...agents.values()].some((a) => a.mode === 'walk' || a.role === 'report');
+const lastMe = { x: me.x, z: me.z };
 function frame(now = performance.now()) {
   requestAnimationFrame(frame);
   // 다른 앱을 쓰는 중이어도 화면에 보이는 동안은 부드럽게 (가려지거나 최소화되면 브라우저가 알아서 멈춘다)
@@ -1637,6 +1669,18 @@ function frame(now = performance.now()) {
     a.av.root.position.set(a.x, 0, a.z);
     a.av.root.rotation.y = a.h;
     a.av.update(dt, { t, moving: a.moving, air: false, st: a.st, seat: a.seat, act: a.act, dn: 0, emote: a.emote, emoteT: a.emoteT, hitT: a.hitT });
+  }
+  // 축구장 공: 나와 에이전트가 움직인 만큼 밀고, 굴리고, 골을 본다
+  if (room.ball) {
+    const bodies = [{ x: me.x, z: me.z, vx: (me.x - lastMe.x) / dt, vz: (me.z - lastMe.z) / dt }];
+    for (const a of agents.values()) bodies.push({ x: a.x, z: a.z, vx: (a.x - (a.lx ?? a.x)) / dt, vz: (a.z - (a.lz ?? a.z)) / dt });
+    room.ball.update(dt, bodies);
+    lastMe.x = me.x;
+    lastMe.z = me.z;
+    for (const a of agents.values()) {
+      a.lx = a.x;
+      a.lz = a.z;
+    }
   }
   me.av.root.position.set(me.x, me.y, me.z);
   me.av.root.rotation.y = me.h;
@@ -1879,7 +1923,7 @@ window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴에�
 if (!MINI && q.get('open') === 'music') setTimeout(() => toggleMusicPanel(true), 500);
 
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
-if (q.get('debug') === '1') window.__ao = { agents, me, used, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard };
+if (q.get('debug') === '1') window.__ao = { agents, me, used, room, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard };
 
 if (boot && Array.isArray(boot.agents) && boot.at) sync(boot);
 setInterval(refresh, 1000);
