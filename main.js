@@ -310,6 +310,12 @@ html, body { overflow: hidden !important; background: #000 !important; }
 /* Premium 안내 같은 팝업이 작은 칸을 덮지 않게 ('계속 시청하시겠어요?' 확인 창은 남긴다) */
 ytd-popup-container tp-yt-paper-dialog:not(:has(yt-confirm-dialog-renderer)), ytd-popup-container ytd-mealbar-promo-renderer, ytd-popup-container yt-mealbar-promo-renderer,
 ytd-popup-container tp-yt-iron-dropdown, tp-yt-iron-overlay-backdrop { display: none !important; }
+/* 플레이어를 감싼 요소가 위치 기준이 되지 않게 (YouTube가 화면 배치를 바꿔도 칸에 꼭 맞게) */
+ytd-app, ytd-app > #content, ytd-page-manager, ytd-watch-flexy, ytd-watch-grid, #columns, #primary, #primary-inner, #player, #player-container-outer,
+#player-container-inner, #player-container, ytd-player, ytd-player > #container, #full-bleed-container, #player-full-bleed-container {
+  transform: none !important; contain: none !important; will-change: auto !important; filter: none !important; container-type: normal !important; }
+/* 불러오는 동안 보이는 회색 뼈대 화면은 숨긴다 */
+#watch-page-skeleton, #home-page-skeleton, #masthead-skeleton-icons { display: none !important; }
 #movie_player { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 1000 !important; background: #000 !important; }
 #movie_player .html5-video-container, #movie_player video { width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important; }
 #movie_player video { object-fit: contain !important; }
@@ -317,6 +323,23 @@ ytd-popup-container tp-yt-iron-dropdown, tp-yt-iron-overlay-backdrop { display: 
 `;
 // 앱 이름이 붙지 않은 보통 Chrome처럼 접속한다
 const YT_UA = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome.split('.')[0]}.0.0.0 Safari/537.36`;
+// 칸이 작으니 화질은 낮게: 보일 때는 360p까지, 음악 창을 접으면 144p (소리는 그대로, 컴퓨터가 덜 바빠진다)
+// 영상이 바뀔 때마다 다시 맞춘다 (YouTube 플레이어의 화질 범위 설정)
+const YT_QUALITY_JS = `(() => {
+  if (window.__aoQualityTimer) return;
+  window.__aoQ = window.__aoQ || 'medium';
+  window.__aoQualityTimer = setInterval(() => {
+    const p = document.getElementById('movie_player');
+    if (!p || !p.setPlaybackQualityRange || !p.getVideoData) return;
+    const key = (p.getVideoData() || {}).video_id + '|' + window.__aoQ;
+    if (key === window.__aoQKey) return;
+    window.__aoQKey = key;
+    p.setPlaybackQualityRange('tiny', window.__aoQ);
+  }, 2000);
+})()`;
+function ytQuality(visible) {
+  if (ytOn()) ytView.webContents.executeJavaScript(`window.__aoQ = '${visible ? 'medium' : 'tiny'}'`).catch(() => {});
+}
 function getYtSession() {
   if (ytSession) return ytSession;
   ytSession = session.fromPartition('agent-office-youtube'); // 'persist:'가 없어서 앱을 끄면 쿠키도 사라진다
@@ -367,7 +390,11 @@ function ytPlay(spec) {
       if (/^https?:\/\//.test(u)) shell.openExternal(u);
       return { action: 'deny' };
     });
-    wc.on('dom-ready', () => wc.insertCSS(YT_CSS).catch(() => {}));
+    wc.on('dom-ready', () => {
+      wc.insertCSS(YT_CSS).catch(() => {});
+      wc.executeJavaScript(YT_QUALITY_JS).catch(() => {});
+      ytQuality(!!ytHost);
+    });
     wc.on('render-process-gone', () => ytStop());
     // YouTube 페이지가 '나가시겠어요?'로 끄기를 막지 못하게
     wc.on('will-prevent-unload', (e) => e.preventDefault());
@@ -385,11 +412,13 @@ function ytShow(rect) {
   }
   const z = win.webContents.getZoomFactor() || 1;
   ytView.setBounds({ x: Math.round(rect.x * z), y: Math.round(rect.y * z), width: Math.round(rect.w * z), height: Math.round(rect.h * z) });
+  ytQuality(true);
 }
 // 칸을 접으면 화면에서만 뺀다 (소리는 계속 난다)
 function ytHide() {
   if (ytView && ytHost && !ytHost.isDestroyed()) ytHost.contentView.removeChildView(ytView);
   ytHost = null;
+  ytQuality(false);
 }
 function ytStop() {
   ytHide();
