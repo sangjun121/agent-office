@@ -2,6 +2,7 @@
 // 상태가 바뀌는 순간(작업 중 → 끝남, 확인 필요)을 보고로 만든다.
 const { execFile } = require('node:child_process');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const { scanLocal, CLAUDE_DIR, CODEX_DIR } = require('./sources.js');
 
 const CANDIDATES = ['/Applications/Orca.app/Contents/Resources/bin/orca', '/usr/local/bin/orca', '/opt/homebrew/bin/orca'];
@@ -75,7 +76,7 @@ function friendly(err, stdout) {
 }
 
 // fixture: 스크린샷용 가짜 에이전트 (지난 시간 → 에이전트 목록). 주면 실제 기록은 읽지 않는다.
-function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered, getSettings = () => ({}), fixture } = {}) {
+function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered, getSettings = () => ({}), persist, fixture } = {}) {
   const startedAt = Date.now();
   const state = { ok: false, error: null, at: 0, agents: [], reports: [], orca: ORCA, sources: { orca: false, claude: false, codex: false } };
   let prev = null;
@@ -86,7 +87,29 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
   let demoSeq = 0;
 
   const unread = () => state.reports.filter((r) => !r.read).length;
-  const makeReport = (a, kind, read) => ({
+  // 보고 지문: 같은 에이전트가 같은 말로 끝낸 일은 같은 보고로 본다 (상태 시각만 다시 찍혀도 새 보고를 만들지 않게)
+  // 권한 필요는 기다리기 시작한 때마다 하나. 내용은 저장하지 않고 이 짧은 지문만 읽음 표시로 남긴다
+  const fpOf = (a, kind) =>
+    crypto
+      .createHash('sha1')
+      .update(kind === 'attention' ? `${a.id}|attention|${a.stateStartedAt || 0}` : `${a.id}|${kind}|${String(a.message || '').trim()}`)
+      .digest('hex')
+      .slice(0, 16);
+  const marks = () => {
+    const s = getSettings();
+    if (!s.readMarks || typeof s.readMarks !== 'object') s.readMarks = {};
+    return s.readMarks;
+  };
+  // 읽음(r)이나 봤어요(s)를 기억한다. 오래된 것부터 500개만 남긴다
+  function remember(fp, v) {
+    const m = marks();
+    if (m[fp] === 's' && v === 'r') return;
+    delete m[fp];
+    m[fp] = v;
+    const keys = Object.keys(m);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 500))) delete m[k];
+  }
+  const makeReport = (a, kind, read) => withMark({
     id: `${a.id}|${a.stateStartedAt || Date.now()}|${kind}`,
     agentId: a.id,
     kind,
@@ -102,9 +125,18 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
     read: !!read,
     seen: false, // 봤어요 처리하면 보고함 목록에서 빠지고 '본 것'으로 간다 (지우지는 않는다)
     demo: !!a.demo,
+    fp: fpOf(a, kind),
   });
+  // 전에 읽었거나 봤어요 한 보고면 그 상태로 만든다
+  function withMark(r) {
+    const mk = marks()[r.fp];
+    if (mk) r.read = true;
+    if (mk === 's') r.seen = true;
+    return r;
+  }
   function addReport(r, notify) {
-    if (state.reports.some((x) => x.id === r.id)) return;
+    if (state.reports.some((x) => x.id === r.id || x.fp === r.fp)) return; // 같은 보고는 한 번만
+    if (r.read) notify = false; // 이미 읽은 보고는 다시 알리지 않는다
     state.reports.unshift(r);
     if (state.reports.length > 200) state.reports.length = 200;
     if (notify) onReport?.(r, unread());
@@ -138,9 +170,13 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
           for (const r of state.reports)
             if (r.agentId === a.id && r.kind === 'attention' && !r.read) {
               r.read = true;
+              remember(r.fp, 'r');
               changed = true;
             }
-          if (changed) onUnread?.(unread());
+          if (changed) {
+            persist?.();
+            onUnread?.(unread());
+          }
         }
       }
     }
@@ -248,7 +284,12 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
     state,
     unread,
     markRead(id) {
-      for (const r of state.reports) if (id === '*' || r.id === id) r.read = true;
+      for (const r of state.reports)
+        if (id === '*' || r.id === id) {
+          r.read = true;
+          remember(r.fp, 'r');
+        }
+      persist?.();
       onUnread?.(unread());
     },
     markSeen(id, seen = true) {
@@ -256,7 +297,10 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
         if (id === '*' || r.id === id) {
           r.seen = seen;
           if (seen) r.read = true;
+          remember(r.fp, seen ? 's' : 'r');
+          if (!seen) marks()[r.fp] = 'r'; // 되돌리기: 목록으로는 돌아오되 읽음은 그대로
         }
+      persist?.();
       onUnread?.(unread());
     },
     startDemo() {

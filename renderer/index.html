@@ -40,6 +40,7 @@
   <symbol id="i-home" viewBox="0 0 20 20"><path d="M3.2 9.2L10 3.4l6.8 5.8v6.8a1.4 1.4 0 0 1-1.4 1.4H4.6a1.4 1.4 0 0 1-1.4-1.4z" fill="currentColor" fill-opacity=".16"/><path d="M8 17.4v-4.6h4v4.6"/></symbol>
   <symbol id="i-plug" viewBox="0 0 20 20"><path d="M7.4 2.6v3.6M12.6 2.6v3.6"/><path d="M4.8 6.2h10.4v2.6a5.2 5.2 0 0 1-10.4 0z" fill="currentColor" fill-opacity=".16"/><path d="M10 14v3.4"/></symbol>
   <symbol id="i-staff" viewBox="0 0 20 20"><circle cx="7.4" cy="7" r="2.8" fill="currentColor" fill-opacity=".16"/><circle cx="13.6" cy="8" r="2.3" fill="currentColor" fill-opacity=".16"/><path d="M2.6 16.4a4.8 4.8 0 0 1 9.6 0M12 12.4a4 4 0 0 1 5.4 3.6"/></symbol>
+  <symbol id="i-music" viewBox="0 0 20 20"><path d="M7.4 14.2V4.6l9-1.8v9.6" /><circle cx="5.4" cy="14.4" r="2" fill="currentColor" fill-opacity=".16"/><circle cx="14.4" cy="12.6" r="2" fill="currentColor" fill-opacity=".16"/><path d="M7.4 7.6l9-1.8"/></symbol>
   <symbol id="i-folder" viewBox="0 0 20 20"><path d="M2.6 5.6a1.6 1.6 0 0 1 1.6-1.6h3.6l1.8 2h6.2a1.6 1.6 0 0 1 1.6 1.6v6.8a1.6 1.6 0 0 1-1.6 1.6H4.2a1.6 1.6 0 0 1-1.6-1.6z" fill="currentColor" fill-opacity=".16"/></symbol>
 </svg>
 
@@ -68,12 +69,13 @@
 </div>
 <div class="hud" id="topRight">
   <button type="button" class="chip off" id="conn" title="연동 설정 열기"><svg class="i" aria-hidden="true"><use href="#i-plug"/></svg><span class="ct">살펴보는 중…</span><svg class="i sub" aria-hidden="true"><use href="#i-sliders"/></svg></button>
-  <label class="chip" id="mapChip" title="맵 바꾸기"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option></select></label>
+  <label class="chip" id="mapChip" title="맵 바꾸기"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option><option value="stadium">축구장</option><option value="paris">생제르맹 데프레</option></select></label>
   <button type="button" class="chip" id="hideBtn" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg><span class="w">쉬는 에이전트 보기</span></button>
+  <button type="button" class="chip" id="musicBtn" aria-pressed="false" aria-expanded="false" title="YouTube 재생목록 틀기"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span class="w">음악</span></button>
   <button type="button" class="chip" id="tutBtn" title="튜토리얼 다시 보기" aria-label="튜토리얼 다시 보기"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg></button>
 </div>
-<div id="hint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · 캐릭터를 누르면 지금 하는 일</div>
-<div id="miniHint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기</div>
+<div id="hint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · <kbd>V</kbd> 1인칭 · 캐릭터를 누르면 지금 하는 일</div>
+<div id="miniHint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · <kbd>V</kbd> 1인칭</div>
 <button id="act" class="btn" type="button" hidden><span></span><kbd>F</kbd></button>
 <div class="hud" id="skills" role="group" aria-label="내 캐릭터">
   <button class="skill" type="button" data-skill="wave" title="인사"><kbd>1</kbd><span>인사</span></button>
@@ -83,6 +85,7 @@
   <button class="skill" type="button" data-skill="gun" title="종이 총"><kbd>G</kbd><span>종이 총</span></button>
   <button class="skill" type="button" data-skill="jump" title="점프"><kbd>Space</kbd><span>점프</span></button>
   <button class="skill" type="button" id="runBtn" aria-pressed="false" title="달리기"><kbd>Shift</kbd><span>달리기</span></button>
+  <button class="skill" type="button" data-skill="view" id="fpvBtn" aria-pressed="false" title="1인칭으로 보기"><kbd>V</kbd><span>1인칭</span></button>
 </div>
 <div id="toasts" aria-live="polite"></div>
 
@@ -124,6 +127,17 @@
   <ol id="restList"></ol>
   <div class="pfoot"><label class="pchk"><input type="checkbox" id="restAll">모두 고르기</label><span class="sp"></span><button type="button" class="btn sm" id="restGo" disabled>퇴근시키기</button></div>
   <label class="popt"><input type="checkbox" id="restHideAll"><span>일 끝난 에이전트는 항상 바로 퇴근</span></label>
+</div>
+
+<!-- 음악: YouTube 재생목록 주소를 넣으면 작은 음악 창이 뜬다 -->
+<div id="musicPanel" class="ppanel" hidden role="dialog" aria-label="음악">
+  <div class="phead"><b>음악</b><small id="musicState"></small><button type="button" class="x" id="musicClose" aria-label="닫기">×</button></div>
+  <div class="mubody">
+    <label class="mufield"><span>YouTube 재생목록 주소</span><input id="musicUrl" placeholder="https://youtube.com/playlist?list=…" autocomplete="off" spellcheck="false"></label>
+    <p class="muerr" id="musicErr" hidden>YouTube 재생목록이나 영상 주소를 넣어 주세요.</p>
+    <p class="munote">틀면 작은 음악 창이 떠요. 그 창만 YouTube에 접속하고, 작업 기록이나 보고 내용은 보내지 않아요. 음반사가 다른 앱에서 못 틀게 막아 둔 뮤직비디오는 재생되지 않을 수 있어요.</p>
+  </div>
+  <div class="pfoot"><button type="button" class="btn ghost sm" id="musicStop">끄기</button><span class="sp"></span><button type="button" class="btn sm" id="musicPlay">틀기</button></div>
 </div>
 
 <!-- 튜토리얼 / 연동 설정: 새 창 대신 앱 안 팝업으로 -->

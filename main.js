@@ -23,7 +23,11 @@ const POP_H = { open: 640, shut: 396 }; // 작은 창 높이: 보고함을 펼�
 const TRAY_GUID = '6c1f7f0e-3b9d-4a57-9e43-6d8a2f5b1c90';
 
 app.setName('에이전트 작업실');
-if (!app.requestSingleInstanceLock()) app.quit();
+if (!app.requestSingleInstanceLock()) {
+  // 이미 켜져 있으면 새로 켠 쪽은 바로 끝낸다 (먼저 켜진 앱이 창을 띄운다)
+  app.quit();
+  process.exit(0);
+}
 
 const webPreferences = { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, autoplayPolicy: 'no-user-gesture-required' };
 function openLinksOutside(w) {
@@ -52,10 +56,16 @@ function showMenu() {
       { label: '튜토리얼 다시 보기', click: () => openSetupInApp(1) },
       { type: 'separator' },
       {
+        label: musicWin ? '음악 끄기' : '음악 틀기…',
+        click: () => (musicWin ? stopMusic() : showWindow({ music: true })),
+      },
+      {
         label: '맵',
         submenu: [
           ['office', '작업실'],
           ['cafe', '카페'],
+          ['stadium', '축구장'],
+          ['paris', '생제르맹 데프레'],
         ].map(([id, label]) => ({ label, type: 'radio', checked: srv?.getSettings().map === id, click: () => srv?.setSettings({ map: id }) })),
       },
       {
@@ -214,15 +224,85 @@ function finishSetup() {
 }
 
 // look: true → 큰 창에서 캐릭터 꾸미기까지 연다, setup: 단계 → 큰 창 안 팝업으로 튜토리얼/연동 설정 (작은 창은 좁다)
+// ---------- 음악 창: YouTube 재생목록 ----------
+// 작업실 창과 다른 세션(메모리에만)에서 돌고, 이 창만 YouTube와 그 영상 서버에 접속할 수 있다.
+let musicWin = null;
+let musicSession = null;
+const MUSIC_HOSTS = /(^|\.)(youtube-nocookie\.com|youtube\.com|ytimg\.com|googlevideo\.com|ggpht\.com|gstatic\.com|googleapis\.com|google\.com)$/;
+function getMusicSession() {
+  if (musicSession) return musicSession;
+  musicSession = session.fromPartition('agent-office-music'); // 'persist:'가 없어서 앱을 끄면 쿠키도 사라진다
+  const page = `http://127.0.0.1:${srv.port}/`;
+  musicSession.webRequest.onBeforeRequest((d, cb) => {
+    if (d.url === `${page}app/music.js` || d.url.startsWith(`${page}music?`)) return cb({ cancel: false });
+    let ok = d.url.startsWith('data:') || d.url.startsWith('blob:');
+    try {
+      const u = new URL(d.url);
+      if ((u.protocol === 'https:' || u.protocol === 'wss:') && MUSIC_HOSTS.test(u.hostname)) ok = true;
+    } catch {}
+    cb({ cancel: !ok });
+  });
+  musicSession.setPermissionRequestHandler((wc, perm, cb) => cb(perm === 'fullscreen'));
+  musicSession.setPermissionCheckHandler((wc, perm) => perm === 'fullscreen');
+  return musicSession;
+}
+function openMusic({ list, v } = {}) {
+  const qs = new URLSearchParams();
+  if (list) qs.set('list', list);
+  if (v) qs.set('v', v);
+  const url = `http://127.0.0.1:${srv.port}/music?${qs}`;
+  if (musicWin && !musicWin.isDestroyed()) {
+    musicWin.loadURL(url);
+    musicWin.show();
+    return;
+  }
+  musicWin = new BrowserWindow({
+    width: 420,
+    height: 266,
+    minWidth: 300,
+    minHeight: 190,
+    title: '에이전트 작업실 음악',
+    backgroundColor: '#000000',
+    show: false,
+    webPreferences: {
+      session: getMusicSession(),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      autoplayPolicy: 'no-user-gesture-required',
+      backgroundThrottling: false,
+    },
+  });
+  const page = `http://127.0.0.1:${srv.port}/music?`;
+  musicWin.webContents.on('will-navigate', (e, u) => {
+    if (!u.startsWith(page)) e.preventDefault();
+  });
+  // 플레이어의 'YouTube에서 보기'는 기본 브라우저로
+  musicWin.webContents.setWindowOpenHandler(({ url: u }) => {
+    if (/^https:\/\/(www\.)?youtube\.com\//.test(u)) shell.openExternal(u);
+    return { action: 'deny' };
+  });
+  musicWin.on('closed', () => {
+    musicWin = null;
+  });
+  musicWin.once('ready-to-show', () => musicWin?.show());
+  musicWin.loadURL(url);
+}
+function stopMusic() {
+  if (musicWin && !musicWin.isDestroyed()) musicWin.close();
+}
+
 function showWindow(opts) {
   const look = opts?.look === true;
   const setup = Number(opts?.setup) || 0;
+  const music = opts?.music === true;
   pop?.hide();
   if (win) {
     win.show();
     win.focus();
     if (look) win.webContents.executeJavaScript('window.openLookFromMain && window.openLookFromMain()').catch(() => {});
     if (setup) win.webContents.executeJavaScript(`window.openSetupFromMain && window.openSetupFromMain(${setup})`).catch(() => {});
+    if (music) win.webContents.executeJavaScript('window.openMusicFromMain && window.openMusicFromMain()').catch(() => {});
     return;
   }
   win = new BrowserWindow({
@@ -243,7 +323,7 @@ function showWindow(opts) {
     win = null;
     updateDock();
   });
-  win.loadURL(look ? `${baseUrl}&open=look` : setup ? `${baseUrl}&open=setup&step=${setup}` : baseUrl);
+  win.loadURL(look ? `${baseUrl}&open=look` : setup ? `${baseUrl}&open=setup&step=${setup}` : music ? `${baseUrl}&open=music` : baseUrl);
   updateDock();
 }
 
@@ -276,14 +356,18 @@ app.whenReady().then(async () => {
     },
     notify: (r) => {
       if (!Notification.isSupported()) return;
+      const who = r.nick || r.name; // 내가 붙인 이름이 있으면 그 이름으로
       const title =
-        r.kind === 'attention' ? `❗ ${r.name} · 확인이 필요해요` : r.kind === 'interrupted' ? `⏸ ${r.name} · 중단됐어요` : `✅ ${r.name} · 다 했어요`;
-      const n = new Notification({ title, subtitle: r.app || undefined, body: String(r.message || r.prompt || '').replace(/\s+/g, ' ').slice(0, 160) });
+        r.kind === 'attention' ? `❗ ${who} · 권한이 필요해요` : r.kind === 'interrupted' ? `⏸ ${who} · 중단됐어요` : `✅ ${who} · 다 했어요`;
+      const subtitle = [r.nick ? r.name : '', r.app].filter(Boolean).join(' · ') || undefined;
+      const n = new Notification({ title, subtitle, body: String(r.message || r.prompt || '').replace(/\s+/g, ' ').slice(0, 160) });
       n.on('click', showPopover);
       n.show();
     },
     badge: setUnread,
     openWindow: showWindow,
+    music: (action, spec) => (action === 'play' ? openMusic(spec) : stopMusic()),
+    musicState: () => ({ on: !!(musicWin && !musicWin.isDestroyed()) }),
     showMenu: () => showMenu(),
   });
   baseUrl = srv.url;

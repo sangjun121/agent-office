@@ -370,3 +370,49 @@ body.mini #restList { max-height: 190px; }
 
 /* 렉 방지: 이름표마다 따로 겹을 만들어, 움직여도 창 전체를 다시 칠하지 않게 */
 #labels .lbl { will-change: transform; }
+
+/* ---------- 보고함: 뒤가 비치지 않게 불투명하게, 큰 창은 내용만큼만 ---------- */
+#inbox { background: #FFFCF6; }
+body.mini.ishut #inbox { background: #FFFCF6; }
+body:not(.mini) #inbox { bottom: auto; max-height: calc(100vh - 136px); }
+body:not(.mini) #inboxList, body:not(.mini) #staffView { flex: 0 1 auto; }
+
+/* ---------- 버튼 글씨는 한 줄로: 자리가 모자라면 글자를 꺾지 말고 버튼째 다음 줄로 ---------- */
+button, .btn, .chip, .skill, .mstat, .iact, .rk { white-space: nowrap; }
+.ihead > button, .ihead > .btn { flex: none; }
+.ihead h3 { min-width: 0; }
+.ihead h3, .ipeek { overflow: hidden; text-overflow: ellipsis; }
+.cbtns { flex-wrap: wrap; }
+.cbtns .btn { flex: 1 0 auto; }
+.rbtns { flex-wrap: wrap; row-gap: 8px; }
+.rbtns .btn { flex: none; }
+.pfoot label { flex: none; white-space: nowrap; }
+.pfoot .btn { flex: none; }
+/* 작은 창: 보고함 머리줄 버튼을 조금 작게 */
+body.mini .ihead .btn.sm { padding: 4px 9px; font-size: 13px; }
+/* 카드 이름 칸: 긴 이름은 끝에 … (작은 창은 카드를 조금 넓히고 글씨를 살짝 작게) */
+.nameIn { text-overflow: ellipsis; }
+body.mini #card { width: 276px; }
+body.mini #card .nameIn { font-size: 16px; }
+
+/* ---------- 좁은 창(1000px 이하): 보고함 제목이 두 줄로 꺾이지 않게 ----------
+   연습 버튼은 넓은 창과 튜토리얼에서 누를 수 있으니 좁을 때만 숨긴다 */
+.ihead h3 { white-space: nowrap; }
+@media (max-width: 1000px) {
+  body:not(.mini) #demoBtn { display: none; }
+}
+
+/* 말풍선을 띄운 캐릭터의 이름표는 맨 위로: 다른 이름표가 보고 내용을 가리지 않게 */
+#labels .lbl:has(> .bub:not([hidden])) { z-index: 1; }
+
+/* ---------- 음악 (YouTube 재생목록) ---------- */
+#musicPanel { width: 340px; }
+.mubody { display: grid; gap: 8px; padding: 4px 16px 12px; }
+.mufield { display: grid; gap: 6px; color: var(--muted); font: 600 12.5px var(--body); }
+.mufield input { padding: 9px 11px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: 14px var(--body); outline: none; -webkit-user-select: text; user-select: text; }
+.mufield input:focus { border-color: var(--accent); }
+.muerr { margin: 0; color: #C2410C; font-size: 12.5px; }
+.munote { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+#musicBtn[aria-pressed="true"] { background: var(--accent-weak) !important; box-shadow: inset 0 0 0 2px var(--accent) !important; }
+#musicBtn .i { color: #3F4A47; }
+#musicStop:disabled { opacity: .45; cursor: default; }

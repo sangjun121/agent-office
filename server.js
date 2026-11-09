@@ -23,9 +23,36 @@ const DEFAULTS = {
   miniInbox: false, // 상단바에서 펼친 작은 창의 보고함을 펼쳐 둘지
   sentHome: {}, // 골라서 퇴근시킨 에이전트: id → 그때 쉬기 시작한 시각 (새 일을 받으면 다시 출근)
   staff: {}, // 직원 명부: 충성도 점수 (staff.js)
+  agentNames: {}, // 내가 붙인 에이전트 이름: id → 이름 (비우면 원래 작업 이름)
+  readMarks: {}, // 읽은 보고의 짧은 지문 (내용은 저장하지 않는다): 다시 켜도 안 읽음으로 돌아오지 않게
   pinPopover: false, // 작은 창을 고정해서 다른 곳을 눌러도 안 닫히게
 };
-const MAPS_OK = new Set(['office', 'cafe']);
+const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris']);
+
+// YouTube 주소에서 재생목록(list)과 영상(v) 아이디만 꺼낸다. 다른 주소는 받지 않는다.
+const YT_V = /^[A-Za-z0-9_-]{11}$/;
+const YT_LIST = /^[A-Za-z0-9_-]{10,80}$/;
+function parseYouTube(input) {
+  const s = String(input || '').trim().slice(0, 500);
+  if (YT_LIST.test(s) && /^(PL|OL|RD|UU|FL|LL|LM)/.test(s)) return { list: s };
+  let u;
+  try {
+    u = new URL(s);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  const host = u.hostname.toLowerCase().replace(/^(www|m|music)\./, '');
+  let v = '';
+  if (host === 'youtu.be') v = u.pathname.split('/')[1] || '';
+  else if (host === 'youtube.com') v = u.searchParams.get('v') || (/^\/(shorts|live)\//.test(u.pathname) ? u.pathname.split('/')[2] || '' : '');
+  else return null;
+  const out = {};
+  const list = u.searchParams.get('list') || '';
+  if (YT_LIST.test(list)) out.list = list;
+  if (YT_V.test(v)) out.v = v;
+  return out.list || out.v ? out : null;
+}
 function loadSettings(file) {
   try {
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -49,6 +76,17 @@ const MAPS = [
   ['/vendor/three/', THREE_DIR],
 ];
 // 에이전트가 돌던 앱 → macOS 앱 이름 (여기 있는 것만 연다)
+// 세션을 바로 여는 링크: 앱이 정한 형식만 쓰고, 세션 ID는 UUID 모양일 때만 넣는다
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function sessionLink(app, agentId) {
+  const [kind, sid] = agentId.split(/:(.*)/s);
+  if (!UUID.test(sid || '')) return null;
+  if (app === 'Claude 데스크톱' && kind === 'claude') return `claude://code/continue?session=${sid}`;
+  if (app === 'Codex 앱' && kind === 'codex') return `codex://threads/${sid}`;
+  return null;
+}
+const canOpenSession = (app, agentId) => !!sessionLink(app, agentId);
+
 const OPEN_APP = {
   Orca: 'Orca',
   'Claude 데스크톱': 'Claude',
@@ -117,6 +155,8 @@ function startServer({
   isViewing, // 작업실 창이 열려 있는지 (닫혀 있으면 덜 자주 확인)
   getLoginItem,
   setLoginItem,
+  music, // ('play', { list, v }) 또는 ('stop'): 음악 창 열고 닫기
+  musicState, // () => { on }
   fixture,
   fixtureDetect,
 } = {}) {
@@ -132,10 +172,11 @@ function startServer({
   const staff = createStaff({ get: () => settings.staff, save: () => saveSettings() });
   const watcher = createWatcher({
     fixture,
+    persist: () => saveSettings(),
     interval: () => (!isViewing || isViewing() ? 2000 : 5000),
     getSettings: () => settings,
     onReport: (r, unread) => {
-      if (settings.notify !== false) notify?.(r);
+      if (settings.notify !== false) notify?.({ ...r, nick: settings.agentNames?.[r.agentId] || '' });
       badge?.(unread);
       staff.onReport(r);
     },
@@ -149,7 +190,7 @@ function startServer({
   const rewardRead = (id) => {
     for (const r of watcher.state.reports) if (!r.read && (id === '*' || r.id === id)) staff.onRead(r);
   };
-  const withKey = (x) => ({ ...x, staffKey: staffOf(x)?.key || null });
+  const withKey = (x) => ({ ...x, staffKey: staffOf(x)?.key || null, canSession: canOpenSession(x.app || '', x.agentId || x.id || '') });
   // 설정 바꾸기 (화면에서도, 상단바 메뉴에서도 쓴다)
   function applySettings(body = {}) {
     if (typeof body.bossName === 'string') settings.bossName = body.bossName.trim().slice(0, 16) || '나';
@@ -202,7 +243,10 @@ function startServer({
             miniInbox: settings.miniInbox,
             pinPopover: settings.pinPopover,
             sentHome: settings.sentHome,
+            agentNames: settings.agentNames,
+            musicUrl: settings.musicUrl || '',
           },
+          music: musicState?.() || { on: false },
           agents: s.agents.map(withKey),
           reports: s.reports.map(withKey),
           ...staff.view(),
@@ -216,6 +260,20 @@ function startServer({
         rewardRead(body.all ? '*' : String(body.id || ''));
         watcher.markRead(body.all ? '*' : String(body.id || ''));
         return json(res, 200, { ok: true, unread: watcher.unread() });
+      }
+      if (p === '/api/agent-name') {
+        const id = String(body.id || '').slice(0, 300);
+        const name = String(body.name || '').trim().slice(0, 20);
+        if (id) {
+          const map = { ...(settings.agentNames || {}) };
+          delete map[id];
+          if (name) map[id] = name;
+          const keys = Object.keys(map);
+          for (const k of keys.slice(0, Math.max(0, keys.length - 300))) delete map[k]; // 오래된 것부터 정리
+          settings.agentNames = map;
+          saveSettings();
+        }
+        return json(res, 200, { ok: !!id });
       }
       if (p === '/api/send-home') {
         const id = String(body.id || '').slice(0, 300);
@@ -264,14 +322,30 @@ function startServer({
         openWindow?.({ look: body.look === true, setup: Number(body.setup) || 0 });
         return json(res, 200, { ok: !!openWindow });
       }
+      if (p === '/api/music') {
+        if (body.action === 'stop') {
+          music?.('stop');
+          return json(res, 200, { ok: true });
+        }
+        const yt = parseYouTube(body.url);
+        if (!yt) return json(res, 400, { ok: false, error: 'bad-url' });
+        settings.musicUrl = String(body.url).trim().slice(0, 500);
+        saveSettings();
+        music?.('play', yt);
+        return json(res, 200, { ok: !!music });
+      }
       if (p === '/api/menu') {
         showMenu?.();
         return json(res, 200, { ok: !!showMenu });
       }
       if (p === '/api/open-app') {
-        const name = OPEN_APP[String(body.app || '')];
-        if (name) execFile('open', ['-a', name], () => {});
-        return json(res, 200, { ok: !!name });
+        const app = String(body.app || '');
+        const name = OPEN_APP[app];
+        // Claude 앱, Codex 앱에서 시작한 세션은 그 세션을 바로 연다 (각 앱이 제공하는 링크)
+        const link = sessionLink(app, String(body.id || ''));
+        if (link) execFile('open', [link], () => {});
+        else if (name) execFile('open', ['-a', name], () => {});
+        return json(res, 200, { ok: !!(link || name), session: !!link });
       }
       if (p === '/api/open-folder') {
         if (!watcher.knownPath(body.path)) return json(res, 400, { ok: false });
@@ -283,6 +357,7 @@ function startServer({
 
     if (p === '/' || p === '/index.html') return sendFile(res, path.join(__dirname, 'renderer', 'index.html'));
     if (p === '/setup') return sendFile(res, path.join(__dirname, 'renderer', 'setup.html'));
+    if (p === '/music') return sendFile(res, path.join(__dirname, 'renderer', 'music.html'));
     if (p === '/favicon.svg') return sendFile(res, path.join(__dirname, 'renderer', 'favicon.svg'));
     for (const [prefix, dir] of MAPS) {
       if (!dir || !p.startsWith(prefix)) continue;
@@ -312,7 +387,7 @@ function startServer({
   });
 }
 
-module.exports = { startServer };
+module.exports = { parseYouTube, startServer };
 
 // `node server.js`: 브라우저로 보기 (알림은 macOS 알림 센터로)
 if (require.main === module) {

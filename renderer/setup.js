@@ -19,7 +19,7 @@ const api = (path, body) =>
 
 const SRC = [
   { key: 'orca', name: 'Orca', badge: 'O', color: '#2A4A6B', desc: 'Orca에서 띄운 Claude, Codex' },
-  { key: 'claude', name: 'Claude', badge: 'C', color: '#C15F3C', desc: '터미널, Claude 앱 Code 탭, VS Code' },
+  { key: 'claude', name: 'Claude', badge: 'C', color: '#C15F3C', desc: '터미널, Claude 앱의 Code 탭, VS Code' },
   { key: 'codex', name: 'Codex', badge: 'X', color: '#2A2F36', desc: 'Codex 앱, 터미널, VS Code' },
 ];
 let icons = {}; // 이 Mac에 깔린 앱의 진짜 아이콘 (없으면 글자 배지)
@@ -29,16 +29,16 @@ function statusOf(key) {
   const d = info.detect[key] || {};
   const on = info.settings.sources[key] !== false;
   if (key === 'orca') {
-    if (!d.installed) return { cls: 'off', pill: '설치 안 됨', detail: 'Orca가 이 Mac에 없어요', available: false };
+    if (!d.installed) return { cls: 'off', pill: '설치 안 됨', detail: '이 Mac에 Orca가 없어요', available: false };
     if (!on) return { cls: 'off', pill: '꺼 둠', detail: '켜면 보고를 받아요', available: true };
-    if (d.ok) return { cls: 'ok', pill: '연결됨', detail: `에이전트 ${d.agents}명${d.working ? `, 지금 ${d.working}명 일하는 중` : ''}`, available: true };
-    return { cls: 'warn', pill: '기다리는 중', detail: 'Orca를 켜면 연결돼요', available: true, title: d.error || '' };
+    if (d.ok) return { cls: 'ok', pill: '연결됨', detail: d.working ? `에이전트 ${d.agents}명 중 ${d.working}명이 일하는 중이에요` : `에이전트 ${d.agents}명`, available: true };
+    return { cls: 'warn', pill: '대기 중', detail: 'Orca를 켜면 연결돼요', available: true, title: d.error || '' };
   }
   const nm = key === 'claude' ? 'Claude' : 'Codex';
-  if (!d.found) return { cls: 'off', pill: '기록 없음', detail: `${nm}를 쓴 기록이 아직 없어요`, available: false };
+  if (!d.found) return { cls: 'off', pill: '기록 없음', detail: `아직 ${nm}를 쓴 기록이 없어요`, available: false };
   if (!on) return { cls: 'off', pill: '꺼 둠', detail: '켜면 보고를 받아요', available: true };
-  if (d.recent) return { cls: 'ok', pill: '찾았어요', detail: `최근 7일 동안 ${d.recent}번 썼어요`, available: true };
-  return { cls: 'warn', pill: '찾았어요', detail: '최근 7일엔 쓴 기록이 없어요', available: true };
+  if (d.recent) return { cls: 'ok', pill: '찾았어요', detail: `최근 7일 동안 세션 ${d.recent}개`, available: true };
+  return { cls: 'warn', pill: '찾았어요', detail: '최근 7일 동안 쓴 기록이 없어요', available: true };
 }
 
 function renderSources() {
@@ -170,7 +170,7 @@ async function load() {
   try {
     [info, icons] = await Promise.all([api('/api/setup'), api('/api/app-icons').catch(() => ({}))]);
   } catch {
-    $('srcs').innerHTML = '<div class="sloading">작업실 서버와 연결하지 못했어요.</div>';
+    $('srcs').innerHTML = '<div class="sloading">작업실 서버에 연결하지 못했어요. 앱을 다시 켜 주세요.</div>';
     return;
   }
   renderSources();

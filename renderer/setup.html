@@ -31,7 +31,7 @@
 <main class="sbox">
   <header class="shead2">
     <img class="slogo" src="/favicon.svg" alt="">
-    <div><h1>에이전트 작업실</h1><p>AI 에이전트가 일을 끝내면 와서 알려 줘요</p></div>
+    <div><h1>에이전트 작업실</h1><p>에이전트가 일을 끝내면 내 자리로 와서 알려 줘요</p></div>
   </header>
 
   <ol class="ssteps" id="steps">
@@ -42,77 +42,79 @@
   </ol>
 
   <section class="spage" data-step="1">
-    <h2>반가워요! 👋</h2>
-    <p class="lead">AI 에이전트에게 일을 맡겨 두세요.<br>끝나면 캐릭터가 걸어와서 알려 줘요.</p>
+    <h2>반가워요</h2>
+    <p class="lead">Claude나 Codex에 일을 맡겨 두면, 일이 끝났을 때 캐릭터가 내 자리로 걸어와서 결과를 알려 줘요.</p>
     <div class="flow">
-      <div><span class="fic work"><svg class="i" aria-hidden="true"><use href="#i-work"/></svg></span><b>일해요</b><small>책상에 앉아서 일해요</small></div>
+      <div><span class="fic work"><svg class="i" aria-hidden="true"><use href="#i-work"/></svg></span><b>일하는 동안</b><small>책상에서 노트북으로 일해요</small></div>
       <i>›</i>
-      <div><span class="fic done"><svg class="i" aria-hidden="true"><use href="#i-report"/></svg></span><b>알려 줘요</b><small>끝나면 내 자리로 와요</small></div>
+      <div><span class="fic done"><svg class="i" aria-hidden="true"><use href="#i-report"/></svg></span><b>일이 끝나면</b><small>내 자리로 와서 결과를 말해요</small></div>
       <i>›</i>
-      <div><span class="fic inb"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg></span><b>모아 둬요</b><small>보고함에 차곡차곡</small></div>
+      <div><span class="fic inb"><svg class="i" aria-hidden="true"><use href="#i-inbox"/></svg></span><b>보고함</b><small>받은 보고를 다시 볼 수 있어요</small></div>
     </div>
-    <label class="field"><span>내 이름</span><input id="bossName" maxlength="16" placeholder="나" autocomplete="off"><small>작업실에서 이 이름으로 불러요</small></label>
+    <label class="field"><span>내 이름</span><input id="bossName" maxlength="16" placeholder="나" autocomplete="off"><small>작업실 이름표에 이 이름이 붙어요</small></label>
     <p class="flabel">일할 곳</p>
     <div class="maps" id="maps">
       <button type="button" class="mapc" data-map="office"><span class="mart office"><i></i><i></i><i></i></span><b>작업실</b><small>큰 테이블과 소파</small></button>
       <button type="button" class="mapc" data-map="cafe"><span class="mart cafe"><i></i><i></i><i></i></span><b>카페</b><small>창가 자리와 원형 테이블</small></button>
+      <button type="button" class="mapc" data-map="stadium"><span class="mart stadium"><i></i><i></i><i></i></span><b>축구장</b><small>하얀 관중석과 전광판</small></button>
+      <button type="button" class="mapc" data-map="paris"><span class="mart paris"><i></i><i></i><i></i></span><b>생제르맹 데프레</b><small>파리 카페 테라스와 성당</small></button>
     </div>
   </section>
 
   <section class="spage" data-step="2" hidden>
-    <h2>어떤 에이전트를 볼까요?</h2>
-    <p class="lead">이 Mac에서 찾은 앱이에요.<br>보고받고 싶은 앱만 켜 두세요.</p>
-    <div class="srcs" id="srcs"><div class="sloading">찾는 중…</div></div>
+    <h2>보고받을 앱 고르기</h2>
+    <p class="lead">이 Mac에서 찾은 앱 가운데 보고받을 앱만 켜 두세요.</p>
+    <div class="srcs" id="srcs"><div class="sloading">앱을 찾고 있어요</div></div>
     <div class="srow"><button type="button" class="btn ghost sm" id="rescan"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>다시 찾기</button><small id="scanAt"></small></div>
     <ul class="notes">
-      <li><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span>로그인이나 키는 필요 없어요.<br>각 앱이 이 Mac에 남긴 작업 기록만 읽어요.</span></li>
-      <li><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg><span>ChatGPT, Claude 앱의 <b>일반 채팅</b>은 볼 수 없어요.<br>Claude 앱의 <b>Code 탭</b>은 위의 Claude로 보여요.</span></li>
+      <li><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span>로그인이나 API 키 없이, 각 앱이 이 Mac에 남긴 작업 기록만 읽어요.</span></li>
+      <li><svg class="i" aria-hidden="true"><use href="#i-chat"/></svg><span>ChatGPT 앱과 Claude 앱의 <b>일반 채팅</b>은 작업 기록이 남지 않아서 볼 수 없어요. Claude 앱의 <b>Code 탭</b>에서 맡긴 일은 위의 Claude에 나와요.</span></li>
     </ul>
   </section>
 
   <section class="spage" data-step="3" hidden>
-    <h2>알림은 어떻게 받을까요?</h2>
-    <p class="lead">작업실을 닫아 둬도<br>보고는 놓치지 않아요.</p>
+    <h2>알림 설정</h2>
+    <p class="lead">작업실 창을 닫아 둬도, 일이 끝나면 알림으로 알려 줘요.</p>
     <div class="opts">
-      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span><span><b>알림 보내기</b><small>일이 끝나면 macOS 알림이 떠요</small></span><span class="switch"><input type="checkbox" id="optNotify"><i></i></span></label>
-      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-sound"/></svg></span><span><b>띵동 소리</b><small>보고하러 올 때 작은 소리가 나요</small></span><span class="switch"><input type="checkbox" id="optSound"><i></i></span></label>
-      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg></span><span><b>쉬는 에이전트 숨기기</b><small>보고만 하고 바로 퇴근해요</small></span><span class="switch"><input type="checkbox" id="optHide"><i></i></span></label>
+      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-bell"/></svg></span><span><b>macOS 알림</b><small>일이 끝나면 화면 오른쪽 위에 알림이 떠요</small></span><span class="switch"><input type="checkbox" id="optNotify"><i></i></span></label>
+      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-sound"/></svg></span><span><b>보고 소리</b><small>캐릭터가 보고하러 올 때 짧은 소리가 나요</small></span><span class="switch"><input type="checkbox" id="optSound"><i></i></span></label>
+      <label class="opt"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg></span><span><b>일 끝나면 바로 퇴근</b><small>보고를 마친 에이전트가 작업실에 남지 않아요</small></span><span class="switch"><input type="checkbox" id="optHide"><i></i></span></label>
       <label class="opt" id="loginRow"><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg></span><span><b>로그인할 때 열기</b><small>Mac을 켜면 상단바에 바로 떠요</small></span><span class="switch"><input type="checkbox" id="optLogin"><i></i></span></label>
     </div>
   </section>
 
   <section class="spage" data-step="4" hidden>
-    <h2>이렇게 쓰면 돼요 🎉</h2>
+    <h2>사용법</h2>
     <div class="mbdemo" aria-hidden="true">
       <div class="mbar"><span class="mapp">파일&nbsp; 편집&nbsp; 보기</span><span class="msp"></span>
         <span class="mtray"><svg viewBox="0 0 36 36"><path d="M13 5 H23 A9 9 0 0 1 32 14 V17 A9 9 0 0 1 23 26 H14 L8.5 31 V25.2 A9 9 0 0 1 4 17 V14 A9 9 0 0 1 13 5 Z" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="13.5" cy="15" rx="1.7" ry="2.2"/><ellipse cx="22.5" cy="15" rx="1.7" ry="2.2"/><path d="M15.6 19.4 Q18 21.6 20.4 19.4" fill="none" stroke="#111" stroke-width="1.9" stroke-linecap="round"/></svg> 2</span>
         <span class="mclock">🔋 9:41</span></div>
       <div class="mpanel">
-        <div class="mph"><b>에이전트 작업실</b><span>🛠 2</span><span>✅ 5</span></div>
+        <div class="mph"><b>에이전트 작업실</b><span class="w"><svg class="i" aria-hidden="true"><use href="#i-work"/></svg>2</span><span class="d"><svg class="i" aria-hidden="true"><use href="#i-report"/></svg>5</span></div>
         <div class="mroom"><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="walk"></i><i class="me"></i></div>
         <div class="mlist"><i></i><i></i></div>
       </div>
     </div>
     <ol class="howto">
-      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-tray"/></svg></span><span><b>상단바 말풍선을 눌러요</b><small>작은 작업실이 펼쳐져요</small></span></li>
-      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-badge"/></svg></span><span><b>숫자가 뜨면 보고가 온 거예요</b><small>일이 끝날 때마다 하나씩 늘어요</small></span></li>
-      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></span><span><b>핀 버튼을 누르면 고정돼요</b><small>다른 곳을 눌러도 안 닫혀요</small></span></li>
-      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-click"/></svg></span><span><b>오른쪽 클릭하면 메뉴가 나와요</b><small>크게 보기, 설정, 튜토리얼 다시 보기</small></span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-tray"/></svg></span><span>상단바의 <b>말풍선 아이콘</b>을 누르면 작은 작업실이 펼쳐져요.</span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-badge"/></svg></span><span>아이콘 옆 <b>숫자</b>는 아직 읽지 않은 보고 수예요.</span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></span><span>작은 창의 <b>핀 버튼</b>을 누르면 다른 곳을 눌러도 닫히지 않아요.</span></li>
+      <li><span class="oic"><svg class="i" aria-hidden="true"><use href="#i-click"/></svg></span><span>아이콘을 <b>오른쪽 클릭</b>하면 크게 보기, 연동 설정, 튜토리얼 다시 보기가 나와요.</span></li>
     </ol>
-    <button type="button" class="btn ghost try" id="tryDemo">🧪 연습 보고 받아 보기</button>
+    <button type="button" class="btn ghost try" id="tryDemo"><svg class="i" aria-hidden="true"><use href="#i-report"/></svg>연습 보고 받아 보기</button>
     <details class="tip" id="trayTip">
-      <summary>상단바에 아이콘이 안 보이나요?</summary>
-      <p>아이콘이 많으면 새 아이콘이 노치나 메뉴 뒤로 숨을 수 있어요.</p>
+      <summary>상단바에 아이콘이 보이지 않을 때</summary>
+      <p>상단바에 아이콘이 많으면 새로 생긴 아이콘이 노치나 메뉴 뒤로 가려질 수 있어요.</p>
       <ol>
-        <li><b>바로 열기</b><span><kbd>⌘</kbd> <kbd>Space</kbd>를 누르고 <b>Agent Office</b>를 실행해요.<br>보고 알림을 눌러도 열려요.</span></li>
-        <li><b>자리 만들기</b><span><b>시스템 설정 → 메뉴 막대</b>에서 안 쓰는 항목을 꺼요.<br>macOS 15 이하는 <b>시스템 설정 → 제어 센터</b>예요.</span></li>
-        <li><b>자리 옮기기</b><span><kbd>⌘</kbd> 키를 누른 채 아이콘을 시계 쪽으로 끌어요.<br>다음에 켜도 그 자리에 떠요.</span></li>
+        <li><b>바로 열기</b><span><kbd>⌘</kbd> <kbd>Space</kbd>로 Spotlight를 열고 <b>Agent Office</b>를 실행하면 작업실 창이 떠요. 보고 알림을 눌러도 열려요.</span></li>
+        <li><b>자리 만들기</b><span><b>시스템 설정 → 메뉴 막대</b>에서 안 쓰는 항목을 끄면 자리가 생겨요. macOS 15 이하에서는 <b>시스템 설정 → 제어 센터</b>에서 꺼요.</span></li>
+        <li><b>자리 옮기기</b><span><kbd>⌘</kbd> 키를 누른 채 아이콘을 시계 쪽으로 끌어다 놓으면, 다음에 켜도 그 자리에 떠요.</span></li>
       </ol>
     </details>
   </section>
 
   <footer class="sfoot">
-    <button type="button" class="tskip" id="skip">나중에 할게요</button>
+    <button type="button" class="btn text" id="skip">건너뛰기</button>
     <span class="sp"></span>
     <button type="button" class="btn ghost" id="prev">이전</button>
     <button type="button" class="btn" id="next">다음</button>

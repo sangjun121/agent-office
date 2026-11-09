@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 import { buildRoom } from '/js/room.js';
 import { buildCafe } from '/js/cafe.js';
+import { buildStadium } from '/js/stadium.js';
+import { buildParis } from '/js/paris.js';
 import { Avatar } from '/js/avatar.js';
 import { Grid } from '/js/path.js';
 import { FX } from '/js/fx.js';
@@ -47,7 +49,7 @@ try {
   boot = await api('/api/state');
 } catch {}
 const settings = { bossName: '나', sound: true, hideResting: false, map: 'office', bossLook: null, ...(boot.settings || {}) };
-const MAP_ID = settings.map === 'cafe' ? 'cafe' : 'office';
+const MAP_ID = ['cafe', 'stadium', 'paris'].includes(settings.map) ? settings.map : 'office';
 
 // ---------- 맵 ----------
 const LAYOUTS = {
@@ -73,6 +75,32 @@ const LAYOUTS = {
     ],
     boss: 'c4w',
     door: { x: 15.2, z: 10.9 },
+  },
+  // 축구장: 기자석(북쪽)과 벤치(남쪽)에서 일하고, 쉬는 에이전트는 그라운드에 나와 있다
+  stadium: {
+    build: (scene, o) => buildStadium(scene, o),
+    work: ['pr1', 'pr2', 'pr3', 'pr4', 'pr5', 'pr6', 'pr7', 'pr8', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8'],
+    lounge: [
+      { x: 8.0, z: 5.1 }, { x: 7.0, z: 6.7 }, { x: 9.1, z: 6.6 }, { x: 4.4, z: 6.0 }, { x: 11.7, z: 5.6 },
+      { x: 3.6, z: 4.4 }, { x: 12.6, z: 7.6 }, { x: 6.0, z: 4.1 }, { x: 10.3, z: 8.0 },
+    ],
+    boss: 'boss',
+    door: { x: 13.6, z: 10.6 },
+  },
+  // 생제르맹 데프레: 카페 테라스에서 일하고, 공원 벤치와 보도에서 쉰다. 출근은 메트로로
+  paris: {
+    build: (scene, o) => buildParis(scene, o),
+    work: [
+      'fa1', 'fa2', 'fa3', 'fa4', 'fa5', 'fa6', 'ma1', 'ma2', 'ma3', 'ma4', 'ma5', 'ma6',
+      'br1', 'br2', 'br3', 'br4', 'br5', 'br6', 'br7', 'br8', 'br9', 'br10', 'br11', 'br12',
+    ],
+    lounge: [
+      { seat: 'sq1' }, { seat: 'sq2' },
+      { x: 10.5, z: 6.35 }, { x: 12.0, z: 6.5 }, { x: 14.1, z: 6.45 }, { x: 9.3, z: 9.2 },
+      { x: 12.9, z: 9.2 }, { x: 14.7, z: 9.3 }, { x: 4.2, z: 6.55 }, { x: 8.75, z: 6.45 },
+    ],
+    boss: 'boss',
+    door: { x: 13.0, z: 6.62 },
   },
 };
 const LAYOUT = LAYOUTS[MAP_ID];
@@ -190,6 +218,10 @@ function popEmoji(lbl, emoji, n = 1) {
 
 // ---------- 자리 ----------
 // ---------- 충성도와 직급 (점수는 서버의 staff.js가 매긴다) ----------
+// 내가 붙인 에이전트 이름 (없으면 원래 작업 이름). 저장하자마자 보이게 nameNow로 먼저 반영한다
+const nameNow = {};
+const nickOf = (id) => (id in nameNow ? nameNow[id] : settings.agentNames?.[id]) || '';
+const nameOf = (d) => nickOf(d?.id) || d?.name || '에이전트';
 const RANK_NAMES = ['인턴', '사원', '대리', '과장', '부장', '오른팔'];
 const RANK_AT = [0, 20, 40, 60, 80, 95];
 const staffOfAgent = (d) => (d?.staffKey && lastState.staff?.[d.staffKey]) || null;
@@ -400,7 +432,7 @@ function nearestAct() {
     const d = Math.hypot(a.x - me.x, a.z - me.z) + 0.1;
     if (d < 1.4 && d < bd) {
       bd = d;
-      best = { kind: 'agent', agent: a, label: `${short(a.data.name, 12)} 보기` };
+      best = { kind: 'agent', agent: a, label: `${short(nameOf(a.data), 12)} 보기` };
     }
   }
   return best;
@@ -570,7 +602,7 @@ function sendHome(a, quiet) {
   homeNow[a.id] = since;
   api('/api/send-home', { id: a.id, since });
   leave(a);
-  if (!quiet) UI.toast(`🏠 ${a.data.name}`, '오늘은 퇴근했어요. 새 일을 받으면 다시 출근해요.', 2400);
+  if (!quiet) UI.toast(`🏠 ${nameOf(a.data)}`, '오늘은 퇴근했어요. 새 일을 받으면 다시 출근해요.', 2400);
 }
 function toLounge(a, instant) {
   if (settings.hideResting || wentHome(a.data)) return leave(a, instant);
@@ -653,7 +685,7 @@ function startReport(a, r) {
   a.report = r;
   a.tries = 0;
   // 작은 창에서는 이름표와 보고함 줄이 알려 주니 알림 쪽지를 띄우지 않는다 (위쪽이 겹치지 않게)
-  if (!MINI) UI.toast(`${r.kind === 'interrupted' ? '⏸' : '✅'} ${r.name}`, '보고하러 가는 중이에요', 2600);
+  if (!MINI) UI.toast(`${r.kind === 'interrupted' ? '⏸' : '✅'} ${nickOf(r.agentId) || r.name}`, '보고하러 가는 중이에요', 2600);
   walkToMe(a);
 }
 
@@ -719,6 +751,7 @@ function applySettings(s) {
 function sync(st) {
   lastState = st;
   applySettings(st.settings);
+  showMusicState(st.music);
   const first = !synced;
   const now = Date.now();
   // 이번에 새로 들어온 보고 (이 에이전트는 숨김 설정이어도 걸어와서 보고한다)
@@ -741,7 +774,7 @@ function sync(st) {
     performed.add(r.id);
     if (first || r.read) continue;
     if (r.kind === 'attention') {
-      if (!MINI) UI.toast(`❗ ${r.name}`, '확인이 필요해요. 자리에서 손을 들고 있어요.', 3500);
+      if (!MINI) UI.toast(`❗ ${nickOf(r.agentId) || r.name}`, '권한이 필요해요. 자리에서 손을 들고 있어요.', 3500);
       chime(true);
       continue;
     }
@@ -818,7 +851,7 @@ let inboxSig = '';
 function renderPeek() {
   const all = lastState.reports || [];
   const r = all.find((x) => !x.read && !x.seen) || all.find((x) => !x.seen);
-  const t = r ? `${kindIco(r.kind)}${esc(r.name)} · ${ago(r.at)}` : all.length ? '새 보고가 없어요' : '아직 받은 보고가 없어요';
+  const t = r ? `${kindIco(r.kind)}${esc(nickOf(r.agentId) || r.name)} · ${ago(r.at)}` : all.length ? '새 보고가 없어요' : '아직 받은 보고가 없어요';
   if ($('inboxPeek').innerHTML !== t) $('inboxPeek').innerHTML = t;
 }
 function renderInbox() {
@@ -854,7 +887,9 @@ function renderInbox() {
       const act = r.seen
         ? `<button type="button" class="iact" data-act="unsee" title="보고함 목록으로 되돌려요">${ico('undo')}되돌리기</button>`
         : `<button type="button" class="iact" data-act="seen" title="목록에서 빼요. '본 것' 탭에서 다시 볼 수 있어요.">${ico('check')}봤어요</button>`;
-      return `<li class="k-${r.kind}${r.read ? '' : ' unread'}" data-id="${esc(r.id)}"><span class="ic">${ic}</span><b>${esc(r.name)}</b><small>${esc(where)}${where ? ' · ' : ''}${ago(r.at)}</small><p>${esc(text)}</p>${act}</li>`;
+      const nick = nickOf(r.agentId);
+      const at = [nick ? r.name : '', where].filter(Boolean).join(' · '); // 이름을 붙였으면 작업 이름은 아래 줄로
+      return `<li class="k-${r.kind}${r.read ? '' : ' unread'}" data-id="${esc(r.id)}"><span class="ic">${ic}</span><b>${esc(nick || r.name)}</b><small>${esc(at)}${at ? ' · ' : ''}${ago(r.at)}</small><p>${esc(text)}</p>${act}</li>`;
     })
     .join('');
 }
@@ -863,11 +898,11 @@ let statusSig = '';
 function drawStatus(st) {
   const ags = st.agents || [];
   const info = {
-    work: ags.filter((d) => ACTIVE.has(d.state)).map((d) => ({ name: d.name, sub: [d.app, statusText(d).replace(/^\S+\s/, '')].filter(Boolean).join(' · ') })),
-    attn: ags.filter((d) => ATTN.has(d.state)).map((d) => ({ name: d.name, sub: d.state === 'blocked' ? '허락이 필요해요' : '답을 기다려요' })),
+    work: ags.filter((d) => ACTIVE.has(d.state)).map((d) => ({ name: nameOf(d), sub: [d.app, statusText(d).replace(/^\S+\s/, '')].filter(Boolean).join(' · ') })),
+    attn: ags.filter((d) => ATTN.has(d.state)).map((d) => ({ name: nameOf(d), sub: d.state === 'blocked' ? '허락이 필요해요' : '답을 기다려요' })),
     done: (st.reports || [])
       .filter((r) => r.kind !== 'attention' && r.at >= startOfToday())
-      .map((r) => ({ name: r.name, sub: [fmtTime(r.at), r.app, r.repo].filter(Boolean).join(' · ') })),
+      .map((r) => ({ name: nickOf(r.agentId) || r.name, sub: [fmtTime(r.at), r.app, r.repo].filter(Boolean).join(' · ') })),
   };
   const sig = JSON.stringify(info) + fmtTime(Date.now());
   if (sig === statusSig) return;
@@ -926,7 +961,7 @@ function openReport(r) {
   const icon = $('rIcon');
   icon.innerHTML = kindIco(r.kind);
   icon.className = `ricon k-${r.kind}`;
-  $('rTitle').textContent = r.name;
+  $('rTitle').textContent = nickOf(r.agentId) || r.name;
   $('rMeta').textContent = [r.app || typeLabel(r.type), r.repo, r.branch, `${new Date(r.at).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}`]
     .filter(Boolean)
     .join(' · ');
@@ -939,7 +974,8 @@ function openReport(r) {
   $('rNote').textContent =
     r.app === 'Orca' && (r.message || '').length >= 195 ? 'Orca가 마지막 답변의 앞부분만 알려 줘서 여기까지 보여요. 전체는 Orca에서 확인해요.' : '';
   $('rFolder').hidden = !r.path;
-  $('rOrca').textContent = `${r.app || '앱'} 열기`;
+  $('rOrca').textContent = r.canSession ? '세션 열기' : `${r.app || '앱'} 열기`;
+  $('rOrca').title = r.canSession ? `${r.app}에서 이 세션을 바로 열어요` : '';
   $('rOrca').hidden = !r.app || r.demo;
   $('rSeen').hidden = !!r.seen;
   $('report').hidden = false;
@@ -965,7 +1001,7 @@ $('rSeen').onclick = () => {
 };
 $('rOrca').onclick = () => {
   const r = currentReport();
-  if (r?.app) api('/api/open-app', { app: r.app });
+  if (r?.app) api('/api/open-app', { app: r.app, id: r.agentId });
 };
 $('rFolder').onclick = () => {
   const r = currentReport();
@@ -1046,6 +1082,16 @@ if (MINI) {
   $('inboxHide').onclick = () => setInbox(false);
   $('inboxShow').onclick = () => setInbox(true);
 }
+
+// 보고함: 화면의 다른 곳을 누르면 닫는다 (큰 창은 옆 패널을 접고, 작은 창은 한 줄로 접는다)
+// 보고 자세히, 캐릭터 카드, 쉬는 에이전트 목록, 꾸미기, 작은 창 머리줄을 누를 때는 그대로 둔다
+const KEEP_INBOX = '#inbox, #inboxShow, .modal, #card, #restPanel, #musicPanel, #avPanel, #avPreview, #miniHead';
+document.addEventListener('pointerdown', (e) => {
+  if (e.target.closest(KEEP_INBOX)) return;
+  if (MINI) {
+    if (miniInboxOpen) setMiniInbox(false, true);
+  } else if (!$('inbox').classList.contains('collapsed')) setInbox(false);
+});
 
 // 작은 창 고정: 켜 두면 다른 곳을 눌러도 안 닫히고, 맨 윗줄을 끌어서 옮길 수 있다
 let pinned = !!settings.pinPopover;
@@ -1168,11 +1214,63 @@ function updateCamera(dt) {
   const cp = Math.cos(cam.pitch);
   const sp = Math.sin(cam.pitch);
   camera.position.set(cam.tx + Math.sin(cam.yaw) * cp * cam.dist, 0.3 + sp * cam.dist, cam.tz + Math.cos(cam.yaw) * cp * cam.dist);
-  camera.lookAt(cam.tx, 0.3, cam.tz);
-  room.setCut(Math.sin(cam.yaw), Math.cos(cam.yaw), true);
+  // 1인칭: 위에서 보던 자리에서 내 눈높이까지 0.6초 동안 내려간다 (돌아올 때는 거꾸로)
+  fpv.t = fpv.on ? Math.min(1, fpv.t + dt / 0.6) : Math.max(0, fpv.t - dt / 0.6);
+  if (fpv.t <= 0) {
+    camera.lookAt(cam.tx, 0.3, cam.tz);
+    room.setCut(Math.sin(cam.yaw), Math.cos(cam.yaw), true);
+    setFov(FOV_TOP);
+    showMe(true);
+    return;
+  }
+  const k = fpv.t * fpv.t * (3 - 2 * fpv.t);
+  fpv.yaw = angleDamp(fpv.yaw, fpv.yawT, 14, dt);
+  me.av.head.getWorldPosition(_eye);
+  fpv.eyeY = damp(fpv.eyeY, _eye.y + 0.06, 10, dt); // 걸을 때 머리가 흔들려도 눈높이는 부드럽게
+  _eye.set(me.x + Math.sin(fpv.yaw) * 0.12, fpv.eyeY, me.z + Math.cos(fpv.yaw) * 0.12);
+  _from.copy(camera.position);
+  camera.position.lerpVectors(_from, _eye, k);
+  const pc = Math.cos(fpv.pitch);
+  _to.set(_eye.x + Math.sin(fpv.yaw) * pc * 4, _eye.y + Math.sin(fpv.pitch) * 4, _eye.z + Math.cos(fpv.yaw) * pc * 4);
+  _from.set(cam.tx, 0.3, cam.tz).lerp(_to, k);
+  camera.lookAt(_from);
+  room.setCut(Math.sin(cam.yaw), Math.cos(cam.yaw), k < 0.5); // 방 안에서는 벽을 다 세운다
+  setFov(FOV_TOP + (FOV_EYE - FOV_TOP) * k);
+  showMe(k < 0.55); // 내 캐릭터와 이름표는 숨긴다 (머리 속이 보이지 않게)
 }
-$('rotL').onclick = () => (cam.yawT += PI / 4);
-$('rotR').onclick = () => (cam.yawT -= PI / 4);
+$('rotL').onclick = () => (fpv.on ? (fpv.yawT += PI / 4) : (cam.yawT += PI / 4));
+$('rotR').onclick = () => (fpv.on ? (fpv.yawT -= PI / 4) : (cam.yawT -= PI / 4));
+
+// ---------- 1인칭 (V): 내 캐릭터 눈높이에서 보기 ----------
+const FOV_TOP = 38;
+const FOV_EYE = 70;
+const fpv = { on: false, t: 0, yaw: 0, yawT: 0, pitch: -0.06, eyeY: 1.2, hidden: false };
+const _eye = new THREE.Vector3();
+const _from = new THREE.Vector3();
+const _to = new THREE.Vector3();
+function setFov(f) {
+  if (Math.abs(camera.fov - f) < 0.01) return;
+  camera.fov = f;
+  camera.updateProjectionMatrix();
+}
+function showMe(on) {
+  if (fpv.hidden === !on) return;
+  fpv.hidden = !on;
+  me.av.setVisible(on);
+  me.lbl.el.style.visibility = on ? '' : 'hidden';
+}
+function toggleView(force) {
+  const on = force ?? !fpv.on;
+  if (on === fpv.on) return;
+  fpv.on = on;
+  $('fpvBtn').setAttribute('aria-pressed', String(on));
+  if (!on) return;
+  fpv.yaw = fpv.yawT = me.h;
+  fpv.pitch = -0.06;
+  me.av.head.getWorldPosition(_eye);
+  fpv.eyeY = _eye.y + 0.06;
+  UI.toast('1인칭으로 봐요', '↑↓로 걷고 ←→로 돌아요. 화면을 끌면 둘러보고, V를 다시 누르면 돌아와요.', 2800);
+}
 
 // ---------- 입력 ----------
 const keys = new Set();
@@ -1184,7 +1282,7 @@ const typing = () => {
 addEventListener('keydown', (e) => {
   if (typing()) return;
   if (e.code === 'Escape') {
-    UI.closeTop();
+    if (!UI.closeTop() && fpv.on) toggleView(false);
     return;
   }
   if (UI.blocking()) return;
@@ -1209,6 +1307,8 @@ addEventListener('keydown', (e) => {
       return firecracker();
     case 'KeyG':
       return toggleGun();
+    case 'KeyV':
+      return toggleView();
   }
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -1221,6 +1321,7 @@ for (const b of document.querySelectorAll('[data-skill]'))
     else if (s === 'boom') firecracker();
     else if (s === 'gun') toggleGun();
     else if (s === 'jump') jump();
+    else if (s === 'view') toggleView();
   });
 $('runBtn').onclick = () => {
   runToggle = !runToggle;
@@ -1239,19 +1340,21 @@ function updateMe(dt) {
     if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
   }
   const run = keys.has('ShiftLeft') || keys.has('ShiftRight') || runToggle;
-  if (f || r) {
-    let mx = -Math.sin(cam.yaw) * f + Math.cos(cam.yaw) * r;
-    let mz = -Math.cos(cam.yaw) * f - Math.sin(cam.yaw) * r;
+  if (fpv.on && r) fpv.yawT -= r * 2.4 * dt; // 1인칭: ←→는 제자리에서 돌기 (앉아 있어도 둘러볼 수 있게)
+  if (fpv.on ? f : f || r) {
+    let mx = fpv.on ? Math.sin(fpv.yaw) * f : -Math.sin(cam.yaw) * f + Math.cos(cam.yaw) * r;
+    let mz = fpv.on ? Math.cos(fpv.yaw) * f : -Math.cos(cam.yaw) * f - Math.sin(cam.yaw) * r;
     const l = Math.hypot(mx, mz) || 1;
     mx /= l;
     mz /= l;
     if (me.st) meStand();
     if (me.act === 'dance' || me.act === 'laptop') me.act = '';
-    const sp = run ? 5.0 : 2.8;
+    const sp = (run ? 5.0 : 2.8) * (fpv.on && f < 0 ? 0.6 : 1); // 뒷걸음은 조금 느리게
     [me.x, me.z] = collide(me.x + mx * sp * dt, me.z + mz * sp * dt);
     me.moving = run ? 2 : 1;
-    me.h = angleDamp(me.h, Math.atan2(mx, mz), 14, dt);
+    if (!fpv.on) me.h = angleDamp(me.h, Math.atan2(mx, mz), 14, dt);
   } else me.moving = 0;
+  if (fpv.on && !me.st) me.h = fpv.yaw;
   if (me.y > 0 || me.vy > 0) {
     me.vy -= 20 * dt;
     me.y += me.vy * dt;
@@ -1283,7 +1386,7 @@ const ndc = new THREE.Vector2();
 function pick(cx, cy) {
   ndc.set(((cx - VB.x) / VB.w) * 2 - 1, -((cy - VB.y) / VB.h) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const targets = [me.av.hitbox, ...[...agents.values()].map((a) => a.av.hitbox)];
+  const targets = [...(fpv.on ? [] : [me.av.hitbox]), ...[...agents.values()].map((a) => a.av.hitbox)];
   const hit = ray.intersectObjects(targets, false)[0];
   if (!hit) return null;
   if (hit.object === me.av.hitbox) return { boss: true };
@@ -1309,6 +1412,12 @@ canvas.addEventListener('pointermove', (e) => {
     canvas.classList.add('dragging');
   }
   if (!drag.moved) return;
+  if (fpv.on) {
+    fpv.yawT += dx * 0.005;
+    fpv.yaw = fpv.yawT;
+    fpv.pitch = clamp(fpv.pitch + dy * 0.004, -0.7, 0.55);
+    return;
+  }
   cam.yawT -= dx * 0.006;
   cam.yaw = cam.yawT;
   cam.pitch = clamp(cam.pitch + dy * 0.004, 0.55, 1.4);
@@ -1329,6 +1438,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
+    if (fpv.on) return;
     cam.distT = clamp(cam.distT + e.deltaY * 0.012, 7, 30);
   },
   { passive: false },
@@ -1347,8 +1457,12 @@ function showCard(hit, x, y) {
       sf.last ? `<small class="llast">최근: ${esc(sf.last.why)} ${sf.last.delta > 0 ? '+' : ''}${sf.last.delta}</small>` : ''
     }`;
   }
-  card.querySelector('.cname').hidden = !!hit.boss;
-  $('cardName').hidden = !hit.boss;
+  // 이름 칸: 나는 내 이름, 에이전트는 내가 붙여 줄 이름 (비우면 원래 작업 이름)
+  card.querySelector('.cname').hidden = true;
+  $('cardName').hidden = false;
+  $('cardName').maxLength = hit.boss ? 16 : 20;
+  $('cardName').placeholder = hit.boss ? '나' : hit.agent.data.name || '에이전트';
+  $('cardName').setAttribute('aria-label', hit.boss ? '내 이름' : '에이전트 이름');
   if (hit.boss) {
     cardAgent = null;
     const n = [...agents.values()].filter((a) => ACTIVE.has(a.data.state)).length;
@@ -1361,9 +1475,10 @@ function showCard(hit, x, y) {
     const a = hit.agent;
     cardAgent = a;
     const d = a.data;
-    card.querySelector('.cname').textContent = d.name;
+    $('cardName').value = nameOf(d);
     card.querySelector('.cstat').textContent = [statusText(d, a.role), d.app || typeLabel(d.type), d.worktree?.repo].filter(Boolean).join(' · ');
     const lines = [];
+    if (nickOf(d.id)) lines.push(`작업: ${d.name}`);
     if (d.prompt) lines.push(`받은 일: ${short(clean(d.prompt), 120)}`);
     if (d.state === 'working' && d.toolHint) lines.push(`지금: ${d.toolHint}`);
     if (d.message && !ACTIVE.has(d.state)) lines.push(`마지막 말: ${short(clean(d.message), 140)}`);
@@ -1371,7 +1486,7 @@ function showCard(hit, x, y) {
     card.querySelector('.cdot').style.background = a.av.look.cloth;
     const hasReport = (lastState.reports || []).some((r) => r.agentId === a.id);
     btns = `${hasReport ? '<button type="button" class="btn ghost" data-c="report">보고 보기</button>' : ''}${
-      d.app && !d.demo ? `<button type="button" class="btn" data-c="app">${esc(d.app)} 열기</button>` : ''
+      d.app && !d.demo ? `<button type="button" class="btn" data-c="app">${d.canSession ? '세션 열기' : `${esc(d.app)} 열기`}</button>` : ''
     }${a.role === 'rest' ? `<button type="button" class="btn ghost" data-c="home">${ico('home')}퇴근시키기</button>` : ''}`;
   }
   card.querySelector('.cbtns').innerHTML = btns;
@@ -1381,7 +1496,7 @@ function showCard(hit, x, y) {
   UI.openLayer('card', hideCard, false);
 }
 function hideCard() {
-  if (!$('cardName').hidden) saveBossName($('cardName').value);
+  if (!$('cardName').hidden) (cardAgent ? saveAgentName(cardAgent, $('cardName').value) : saveBossName($('cardName').value));
   $('card').hidden = true;
   UI.closeLayer('card');
 }
@@ -1393,7 +1508,7 @@ $('card').addEventListener('click', (e) => {
   hideCard();
   if (c === 'look') openLook();
   else if (c === 'home' && a) sendHome(a);
-  else if (c === 'app' && a?.data.app) api('/api/open-app', { app: a.data.app });
+  else if (c === 'app' && a?.data.app) api('/api/open-app', { app: a.data.app, id: a.id });
   else if (c === 'report' && a) {
     const r = (lastState.reports || []).find((x) => x.agentId === a.id);
     if (r) openReport(r);
@@ -1421,14 +1536,22 @@ function saveBossName(v) {
   nameTouched = Date.now();
   api('/api/settings', { bossName: name });
 }
+function saveAgentName(a, v) {
+  const name = String(v || '').trim().slice(0, 20);
+  const val = name === (a.data.name || '') ? '' : name; // 원래 작업 이름과 같으면 붙인 이름을 지운다
+  if (nickOf(a.id) === val) return;
+  nameNow[a.id] = val;
+  api('/api/agent-name', { id: a.id, name: val });
+}
 for (const id of ['cardName', 'avName']) {
   const inp = $(id);
-  inp.addEventListener('change', () => saveBossName(inp.value));
+  const forAgent = () => id === 'cardName' && cardAgent;
+  inp.addEventListener('change', () => (forAgent() ? saveAgentName(cardAgent, inp.value) : saveBossName(inp.value)));
   inp.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') inp.blur();
     if (e.key === 'Escape') {
-      inp.value = me.lbl.nm.textContent || '나';
+      inp.value = forAgent() ? nameOf(cardAgent.data) : me.lbl.nm.textContent || '나';
       inp.blur();
     }
   });
@@ -1464,7 +1587,7 @@ function updateLabels(now) {
   for (const a of agents.values()) {
     a.av.labelAnchor(_a);
     place(a.lbl, _a.x, _a.y, _a.z);
-    setText(a.lbl.nm, 'nmText', a.lbl, short(a.data.name || '에이전트', 18));
+    setText(a.lbl.nm, 'nmText', a.lbl, short(nameOf(a.data), 18));
     setText(a.lbl.sub, 'subText', a.lbl, statusText(a.data, a.role));
     const attn = ATTN.has(a.data.state) && a.role !== 'report';
     if (a.lbl.attn !== attn) {
@@ -1477,16 +1600,21 @@ function updateLabels(now) {
     }
   }
 }
-// 렉 방지: 창을 보고 있고 뭔가 움직일 때만 1초에 60번, 가만히 있으면 24번, 다른 앱을 쓰는 중이면 12번 그린다
+// 렉 방지: 뭔가 움직일 때만 1초에 60번, 가만히 있으면 30번 그린다
 let lastDraw = 0;
 let drawNo = 0;
-let focused = document.hasFocus();
-addEventListener('focus', () => (focused = true));
-addEventListener('blur', () => (focused = false));
-const lively = () => keys.size > 0 || me.moving > 0 || me.y > 0 || [...agents.values()].some((a) => a.mode === 'walk' || a.role === 'report');
+const lively = () =>
+  keys.size > 0 ||
+  me.moving > 0 ||
+  me.y > 0 ||
+  !!drag?.moved ||
+  (fpv.t > 0 && fpv.t < 1) ||
+  (fpv.on && Math.abs(fpv.yaw - fpv.yawT) > 0.001) ||
+  [...agents.values()].some((a) => a.mode === 'walk' || a.role === 'report');
 function frame(now = performance.now()) {
   requestAnimationFrame(frame);
-  const fps = !focused ? 12 : lively() ? 60 : 24;
+  // 다른 앱을 쓰는 중이어도 화면에 보이는 동안은 부드럽게 (가려지거나 최소화되면 브라우저가 알아서 멈춘다)
+  const fps = lively() ? 60 : 30;
   if (now - lastDraw < 1000 / fps - 4) return;
   lastDraw = now;
   // 그림자는 가구만 만든다 (캐릭터는 동그란 그림자) → 가끔만 다시 그리면 된다
@@ -1637,7 +1765,8 @@ function renderRest() {
         .map((d) => {
           const home = wentHome(d) || settings.hideResting;
           const sub = [d.app || typeLabel(d.type), d.worktree?.repo, ago(d.updatedAt)].filter(Boolean).join(' · ');
-          return `<li class="${home ? 'home' : ''}"><label><input type="checkbox" data-id="${esc(d.id)}" ${home ? 'disabled' : ''}><span class="rt"><b>${esc(d.name)}</b><small>${esc(sub)}</small></span></label>${
+          const sub2 = [nickOf(d.id) ? d.name : '', sub].filter(Boolean).join(' · ');
+          return `<li class="${home ? 'home' : ''}"><label><input type="checkbox" data-id="${esc(d.id)}" ${home ? 'disabled' : ''}><span class="rt"><b>${esc(nameOf(d))}</b><small>${esc(sub2)}</small></span></label>${
             home ? (settings.hideResting ? '<span class="gone">퇴근함</span>' : `<button type="button" class="btn ghost sm" data-back="${esc(d.id)}">다시 부르기</button>`) : ''
           }</li>`;
         })
@@ -1692,10 +1821,57 @@ $('restHideAll').addEventListener('change', (e) => {
 $('restClose').onclick = () => toggleRest(false);
 document.addEventListener('pointerdown', (e) => {
   if (restOpen && !e.target.closest('#restPanel, #hideBtn, #mHide')) toggleRest(false);
+  if (musicPanelOpen && !e.target.closest('#musicPanel, #musicBtn')) toggleMusicPanel(false);
 });
 
+// ---------- 음악: YouTube 재생목록 (켤 때만 작은 음악 창이 YouTube에 접속한다) ----------
+let musicPanelOpen = false;
+function toggleMusicPanel(force) {
+  if (MINI) return;
+  musicPanelOpen = force ?? !musicPanelOpen;
+  $('musicPanel').hidden = !musicPanelOpen;
+  $('musicBtn').setAttribute('aria-expanded', String(musicPanelOpen));
+  if (!musicPanelOpen) return UI.closeLayer('music');
+  const b = $('musicBtn').getBoundingClientRect();
+  const P = $('musicPanel');
+  P.style.top = `${Math.round(b.bottom + 8)}px`;
+  P.style.right = `${Math.max(10, Math.round(innerWidth - b.right))}px`;
+  $('musicUrl').value = lastState.settings?.musicUrl || '';
+  $('musicErr').hidden = true;
+  UI.openLayer('music', () => toggleMusicPanel(false), false);
+  setTimeout(() => $('musicUrl').focus(), 60);
+}
+function showMusicState(m) {
+  const on = !!m?.on;
+  $('musicBtn').setAttribute('aria-pressed', String(on));
+  $('musicState').textContent = on ? '재생 중' : '';
+  $('musicStop').disabled = !on;
+}
+$('musicBtn').onclick = () => toggleMusicPanel();
+$('musicClose').onclick = () => toggleMusicPanel(false);
+$('musicPlay').onclick = async () => {
+  const r = await api('/api/music', { action: 'play', url: $('musicUrl').value }).catch(() => null);
+  if (!r?.ok) {
+    $('musicErr').hidden = false;
+    return;
+  }
+  toggleMusicPanel(false);
+  UI.toast('음악을 틀었어요', '작은 음악 창에서 멈추거나 다음 곡으로 넘겨요.', 2600);
+  refresh();
+};
+$('musicStop').onclick = () =>
+  api('/api/music', { action: 'stop' }).then(() => {
+    toggleMusicPanel(false);
+    refresh();
+  });
+$('musicUrl').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('musicPlay').click();
+});
+window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴의 '음악 틀기…'
+if (!MINI && q.get('open') === 'music') setTimeout(() => toggleMusicPanel(true), 500);
+
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
-if (q.get('debug') === '1') window.__ao = { agents, me, used, NEAR_BOSS, rank: rankOfAgent, state: () => lastState };
+if (q.get('debug') === '1') window.__ao = { agents, me, used, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard };
 
 if (boot && Array.isArray(boot.agents) && boot.at) sync(boot);
 setInterval(refresh, 1000);

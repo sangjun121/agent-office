@@ -192,3 +192,61 @@ body.setup.embed .sbox { height: 100vh; max-height: none; max-width: none; borde
 
 /* 앱 목록이 늦게 채워져도 스크롤이 저절로 내려가지 않게 */
 .spage { overflow-anchor: none; }
+
+/* ---------- 버튼 하나로 통일: 같은 높이, 같은 글꼴, 같은 모서리 ----------
+   주 버튼(주황), 보조 버튼(흰 바탕에 테두리), 글자 버튼 세 가지만 쓴다 */
+.sbox .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 42px; padding: 0 18px; border: 0; border-radius: 12px; font: 600 15px var(--body); line-height: 1; box-shadow: none; transition: background .15s, filter .15s; }
+.sbox .btn:active { transform: translateY(1px); }
+.sbox .btn:not(.ghost):not(.text) { background: var(--accent); color: #fff; }
+.sbox .btn:not(.ghost):not(.text):hover { filter: brightness(1.05); }
+.sbox .btn.ghost { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+.sbox .btn.ghost:hover { background: var(--card-2); }
+.sbox .btn.text { padding: 0 8px; background: none; color: var(--muted); font-weight: 500; }
+.sbox .btn.text:hover { color: var(--ink); }
+.sbox .btn.sm { height: 34px; padding: 0 12px; border-radius: 10px; font-size: 13.5px; }
+.sbox .btn .i { width: 17px; height: 17px; }
+.sbox .btn.sm .i { width: 15px; height: 15px; }
+.sbox .btn:disabled { opacity: .5; cursor: default; }
+.sfoot .btn:not(.text) { min-width: 96px; }
+.try { width: 100%; margin-top: 2px; }
+/* 사용법: 한 문장씩 */
+.howto li > span:last-child { display: block; color: #4B5452; font-size: 14.5px; line-height: 1.55; }
+.howto li b { font: inherit; font-weight: 700; color: var(--ink); }
+.tip summary { font-weight: 600; }
+
+/* 알림 줄: 아이콘 | 글 | 스위치 (아이콘 칸이 늘어나던 문제 고침) */
+.opt > span:first-child { flex: none; display: grid; }
+.opt > .oic { flex: none; width: 38px; }
+.opt > span:nth-child(2) { flex: 1; display: grid; gap: 2px; min-width: 0; }
+
+/* 한 화면에 들어오게 간격 줄이기 */
+.spage .lead { margin-bottom: 14px; }
+.flow { margin-bottom: 16px; }
+.flow > div { padding: 11px 8px 10px; }
+.fic { width: 36px; height: 36px; border-radius: 12px; }
+.fic .i { width: 21px; height: 21px; }
+.field small { margin-top: -2px; }
+.flabel { margin: 14px 0 8px; }
+.mart { height: 50px; }
+.mbdemo { height: 172px; margin-bottom: 12px; }
+.howto { gap: 6px; margin-bottom: 12px; }
+.howto li { padding: 9px 12px; }
+.oic { width: 34px; height: 34px; }
+.oic .i { width: 19px; height: 19px; }
+
+/* 사용법 그림: 작은 창이 그림 안에 다 들어오게, 머리줄은 앱 아이콘으로 */
+.mroom { height: 72px; }
+.mph span { display: inline-flex; align-items: center; gap: 2px; }
+.mph .i { width: 10px; height: 10px; stroke-width: 2.2; }
+.mph .w { color: #3D6FD8; }
+.mph .d { color: #2E8B57; }
+.mroom .me { top: 48px; }
+.mroom .walk { animation-name: walk2; }
+@keyframes walk2 { 0%, 20% { left: 140px; top: 16px; } 70%, 100% { left: 44px; top: 44px; } }
+
+/* 맵 그림: 축구장 (관중석 띠 + 잔디 + 하프라인) */
+.mart.stadium { background: linear-gradient(180deg, #D2D6DB 0 30%, #4C9A50 30% 100%); }
+.mart.stadium::after { content: ''; position: absolute; left: 50%; top: 30%; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, .85); }
+/* 맵 그림: 생제르맹 데프레 (건물 띠 + 차양 + 보도) */
+.mart.paris { background: linear-gradient(180deg, #EADFCB 0 34%, #234A3A 34% 46%, #D9D2C5 46% 70%, #5E6167 70%); }
+.mart.paris::after { content: ''; position: absolute; right: 10%; top: 4px; width: 14px; height: 30px; background: #CDBFA6; box-shadow: 0 -10px 0 -3px #56616B; }
