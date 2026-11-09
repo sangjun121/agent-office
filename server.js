@@ -155,7 +155,7 @@ function startServer({
   isViewing, // 작업실 창이 열려 있는지 (닫혀 있으면 덜 자주 확인)
   getLoginItem,
   setLoginItem,
-  music, // ('play', { list, v }) 또는 ('stop'): 음악 창 열고 닫기
+  music, // ('play', { list, v }) | ('show', rect) | ('hide') | ('stop'): 작업실 창 안 음악 칸
   musicState, // () => { on }
   fixture,
   fixtureDetect,
@@ -323,8 +323,15 @@ function startServer({
         return json(res, 200, { ok: !!openWindow });
       }
       if (p === '/api/music') {
-        if (body.action === 'stop') {
-          music?.('stop');
+        if (body.action === 'stop' || body.action === 'hide') {
+          music?.(body.action);
+          return json(res, 200, { ok: true });
+        }
+        if (body.action === 'show') {
+          const r = body.rect || {};
+          const n = (v, max) => Number.isFinite(v) && v >= 0 && v <= max;
+          if (!(n(r.x, 8000) && n(r.y, 8000) && n(r.w, 4000) && n(r.h, 4000))) return json(res, 400, { ok: false });
+          music?.('show', { x: r.x, y: r.y, w: r.w, h: r.h });
           return json(res, 200, { ok: true });
         }
         const yt = parseYouTube(body.url);
@@ -349,6 +356,12 @@ function startServer({
       }
       if (p === '/api/open-folder') {
         if (!watcher.knownPath(body.path)) return json(res, 400, { ok: false });
+        // 진짜 폴더만 연다 (앱 같은 묶음 폴더는 'open'으로 열면 실행되니 막는다)
+        let dir = false;
+        try {
+          dir = fs.statSync(body.path).isDirectory() && !/\.(app|bundle|framework|plugin|kext|prefpane|appex|workflow|action|saver|qlgenerator)\/?$/i.test(body.path);
+        } catch {}
+        if (!dir) return json(res, 400, { ok: false });
         execFile('open', [body.path], () => {});
         return json(res, 200, { ok: true });
       }
@@ -357,7 +370,6 @@ function startServer({
 
     if (p === '/' || p === '/index.html') return sendFile(res, path.join(__dirname, 'renderer', 'index.html'));
     if (p === '/setup') return sendFile(res, path.join(__dirname, 'renderer', 'setup.html'));
-    if (p === '/music') return sendFile(res, path.join(__dirname, 'renderer', 'music.html'));
     if (p === '/favicon.svg') return sendFile(res, path.join(__dirname, 'renderer', 'favicon.svg'));
     for (const [prefix, dir] of MAPS) {
       if (!dir || !p.startsWith(prefix)) continue;

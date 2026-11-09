@@ -1824,50 +1824,72 @@ document.addEventListener('pointerdown', (e) => {
   if (musicPanelOpen && !e.target.closest('#musicPanel, #musicBtn')) toggleMusicPanel(false);
 });
 
-// ---------- 음악: YouTube 재생목록 (켤 때만 작은 음악 창이 YouTube에 접속한다) ----------
+// ---------- 음악: '음악' 버튼 아래 작은 팝업. 영상 칸 위에 YouTube 페이지가 겹쳐 뜬다 ----------
+// (YouTube 칸은 main.js가 따로 띄운다. 이 칸만 YouTube에 접속하고, 접어도 소리는 계속 난다)
 let musicPanelOpen = false;
-function toggleMusicPanel(force) {
-  if (MINI) return;
-  musicPanelOpen = force ?? !musicPanelOpen;
-  $('musicPanel').hidden = !musicPanelOpen;
-  $('musicBtn').setAttribute('aria-expanded', String(musicPanelOpen));
-  if (!musicPanelOpen) return UI.closeLayer('music');
+let musicOn = false;
+function placeMusicPanel() {
   const b = $('musicBtn').getBoundingClientRect();
   const P = $('musicPanel');
   P.style.top = `${Math.round(b.bottom + 8)}px`;
   P.style.right = `${Math.max(10, Math.round(innerWidth - b.right))}px`;
-  $('musicUrl').value = lastState.settings?.musicUrl || '';
+}
+function placeMusicView() {
+  if (!musicPanelOpen || !musicOn) return;
+  const r = $('musicStage').getBoundingClientRect();
+  api('/api/music', { action: 'show', rect: { x: Math.max(0, r.left), y: Math.max(0, r.top), w: r.width, h: r.height } }).catch(() => {});
+}
+function toggleMusicPanel(force) {
+  if (MINI) return api('/api/open-window', { music: true }); // 작은 창에서는 큰 창을 열어 보여 준다
+  musicPanelOpen = force ?? !musicPanelOpen;
+  $('musicPanel').hidden = !musicPanelOpen;
+  $('musicBtn').setAttribute('aria-expanded', String(musicPanelOpen));
+  if (!musicPanelOpen) {
+    UI.closeLayer('music');
+    if (musicOn) api('/api/music', { action: 'hide' }).catch(() => {});
+    return;
+  }
+  placeMusicPanel();
+  if (!$('musicUrl').value) $('musicUrl').value = lastState.settings?.musicUrl || '';
   $('musicErr').hidden = true;
   UI.openLayer('music', () => toggleMusicPanel(false), false);
-  setTimeout(() => $('musicUrl').focus(), 60);
+  requestAnimationFrame(placeMusicView);
+  if (!musicOn) setTimeout(() => $('musicUrl').focus(), 60);
 }
 function showMusicState(m) {
   const on = !!m?.on;
+  const turnedOn = on && !musicOn;
+  musicOn = on;
   $('musicBtn').setAttribute('aria-pressed', String(on));
-  $('musicState').textContent = on ? '재생 중' : '';
+  $('musicState').textContent = on ? m.title || '재생 중' : '';
+  $('musicState').title = on ? m.title || '' : '';
   $('musicStop').disabled = !on;
+  $('musicStage').classList.toggle('on', on);
+  if (turnedOn) placeMusicView();
 }
 $('musicBtn').onclick = () => toggleMusicPanel();
 $('musicClose').onclick = () => toggleMusicPanel(false);
-$('musicPlay').onclick = async () => {
+$('musicForm').onsubmit = async (e) => {
+  e.preventDefault();
   const r = await api('/api/music', { action: 'play', url: $('musicUrl').value }).catch(() => null);
   if (!r?.ok) {
     $('musicErr').hidden = false;
     return;
   }
-  toggleMusicPanel(false);
-  UI.toast('음악을 틀었어요', '작은 음악 창에서 멈추거나 다음 곡으로 넘겨요.', 2600);
-  refresh();
+  $('musicErr').hidden = true;
+  showMusicState({ on: true, title: '' });
+  placeMusicView();
 };
 $('musicStop').onclick = () =>
   api('/api/music', { action: 'stop' }).then(() => {
-    toggleMusicPanel(false);
-    refresh();
+    showMusicState({ on: false });
   });
-$('musicUrl').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('musicPlay').click();
+addEventListener('resize', () => {
+  if (!musicPanelOpen) return;
+  placeMusicPanel();
+  placeMusicView();
 });
-window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴의 '음악 틀기…'
+window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴의 '음악 틀기…', '음악 보기'
 if (!MINI && q.get('open') === 'music') setTimeout(() => toggleMusicPanel(true), 500);
 
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)

@@ -405,14 +405,19 @@ body.mini #card .nameIn { font-size: 16px; }
 /* 말풍선을 띄운 캐릭터의 이름표는 맨 위로: 다른 이름표가 보고 내용을 가리지 않게 */
 #labels .lbl:has(> .bub:not([hidden])) { z-index: 1; }
 
-/* ---------- 음악 (YouTube 재생목록) ---------- */
-#musicPanel { width: 340px; }
-.mubody { display: grid; gap: 8px; padding: 4px 16px 12px; }
-.mufield { display: grid; gap: 6px; color: var(--muted); font: 600 12.5px var(--body); }
-.mufield input { padding: 9px 11px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: 14px var(--body); outline: none; -webkit-user-select: text; user-select: text; }
-.mufield input:focus { border-color: var(--accent); }
-.muerr { margin: 0; color: #C2410C; font-size: 12.5px; }
-.munote { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+/* ---------- 음악: '음악' 버튼 아래로 펼치는 작은 창 ---------- */
+#musicPanel { width: 432px; }
+#musicPanel .phead small { min-width: 0; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.murow { display: flex; gap: 8px; padding: 2px 16px 0; }
+.murow input { flex: 1; min-width: 0; padding: 8px 11px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: 13.5px var(--body); outline: none; -webkit-user-select: text; user-select: text; }
+.murow input:focus { border-color: var(--accent); }
+.muerr { margin: 6px 16px 0; color: #C2410C; font-size: 12.5px; }
+/* 영상 칸: 400 x 282 (YouTube 맨 위 막대 + 16:9 영상) */
+.mustage { display: grid; place-items: center; height: 282px; margin: 10px 16px 0; border-radius: 10px; background: #14171C; color: #C9CED6; text-align: center; overflow: hidden; }
+.mustage p { margin: 0; font-size: 13px; line-height: 1.6; }
+.mustage p b { color: #fff; }
+.mustage.on p { display: none; }
+.munote { color: var(--muted); font-size: 12px; }
 #musicBtn[aria-pressed="true"] { background: var(--accent-weak) !important; box-shadow: inset 0 0 0 2px var(--accent) !important; }
 #musicBtn .i { color: #3F4A47; }
 #musicStop:disabled { opacity: .45; cursor: default; }

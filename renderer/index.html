@@ -71,7 +71,7 @@
   <button type="button" class="chip off" id="conn" title="연동 설정 열기"><svg class="i" aria-hidden="true"><use href="#i-plug"/></svg><span class="ct">살펴보는 중…</span><svg class="i sub" aria-hidden="true"><use href="#i-sliders"/></svg></button>
   <label class="chip" id="mapChip" title="맵 바꾸기"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option><option value="stadium">축구장</option><option value="paris">생제르맹 데프레</option></select></label>
   <button type="button" class="chip" id="hideBtn" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg><span class="w">쉬는 에이전트 보기</span></button>
-  <button type="button" class="chip" id="musicBtn" aria-pressed="false" aria-expanded="false" title="YouTube 재생목록 틀기"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span class="w">음악</span></button>
+  <button type="button" class="chip" id="musicBtn" aria-pressed="false" aria-expanded="false" title="YouTube 음악 틀기"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span class="w">음악</span></button>
   <button type="button" class="chip" id="tutBtn" title="튜토리얼 다시 보기" aria-label="튜토리얼 다시 보기"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg></button>
 </div>
 <div id="hint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · <kbd>V</kbd> 1인칭 · 캐릭터를 누르면 지금 하는 일</div>
@@ -129,15 +129,13 @@
   <label class="popt"><input type="checkbox" id="restHideAll"><span>일 끝난 에이전트는 항상 바로 퇴근</span></label>
 </div>
 
-<!-- 음악: YouTube 재생목록 주소를 넣으면 작은 음악 창이 뜬다 -->
+<!-- 음악: '음악' 버튼 아래로 펼치는 작은 창. 영상 칸 위에 YouTube가 겹쳐 뜬다 -->
 <div id="musicPanel" class="ppanel" hidden role="dialog" aria-label="음악">
-  <div class="phead"><b>음악</b><small id="musicState"></small><button type="button" class="x" id="musicClose" aria-label="닫기">×</button></div>
-  <div class="mubody">
-    <label class="mufield"><span>YouTube 재생목록 주소</span><input id="musicUrl" placeholder="https://youtube.com/playlist?list=…" autocomplete="off" spellcheck="false"></label>
-    <p class="muerr" id="musicErr" hidden>YouTube 재생목록이나 영상 주소를 넣어 주세요.</p>
-    <p class="munote">틀면 작은 음악 창이 떠요. 그 창만 YouTube에 접속하고, 작업 기록이나 보고 내용은 보내지 않아요. 음반사가 다른 앱에서 못 틀게 막아 둔 뮤직비디오는 재생되지 않을 수 있어요.</p>
-  </div>
-  <div class="pfoot"><button type="button" class="btn ghost sm" id="musicStop">끄기</button><span class="sp"></span><button type="button" class="btn sm" id="musicPlay">틀기</button></div>
+  <div class="phead"><b>음악</b><small id="musicState"></small><button type="button" class="x" id="musicClose" aria-label="접기">×</button></div>
+  <form class="murow" id="musicForm"><input id="musicUrl" placeholder="YouTube 영상이나 재생목록 주소" autocomplete="off" spellcheck="false"><button type="submit" class="btn sm" id="musicPlay">틀기</button></form>
+  <p class="muerr" id="musicErr" hidden>YouTube 영상이나 재생목록 주소를 넣어 주세요.</p>
+  <div class="mustage" id="musicStage"><p>주소를 넣고 <b>틀기</b>를 누르면 여기서 재생돼요.<br>영상, 재생목록, 믹스 모두 돼요.</p></div>
+  <div class="pfoot"><small class="munote">이 칸만 YouTube에 접속해요. 접어 둬도 계속 재생돼요.</small><span class="sp"></span><button type="button" class="btn ghost sm" id="musicStop">끄기</button></div>
 </div>
 
 <!-- 튜토리얼 / 연동 설정: 새 창 대신 앱 안 팝업으로 -->
