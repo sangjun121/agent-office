@@ -2,9 +2,10 @@
 // 상단바 아이콘을 누르면 바로 아래에 작은 작업실이 펼쳐지고, 바깥을 누르면 접힌다.
 // 크게 보고 싶으면 '크게 보기'로 큰 창을 연다. 앱은 상단바에 남아서 계속 지켜본다.
 const path = require('node:path');
-const { app, BrowserWindow, Notification, shell, Tray, Menu, nativeImage, screen, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, Notification, shell, Tray, Menu, nativeImage, screen, session, dialog } = require('electron');
 const { startServer } = require('./server.js');
 const { getAppIcons } = require('./appicons.js');
+const updater = require('./updater.js');
 
 let tray = null;
 let pop = null; // 상단바에서 펼치는 작은 창
@@ -65,6 +66,17 @@ function showMenu() {
         ],
       },
       {
+        label: 'YouTube',
+        submenu: ytOn()
+          ? [
+              { label: `재생 중: ${ytState().title || 'YouTube'}`.slice(0, 70), enabled: false },
+              { type: 'separator' },
+              { label: '보기', click: () => showWindow({ music: 'yt' }) },
+              { label: '끄기', click: () => ytStop() },
+            ]
+          : [{ label: '링크 넣고 틀기…', click: () => showWindow({ music: 'yt' }) }],
+      },
+      {
         label: '맵',
         submenu: [
           ['office', '작업실'],
@@ -83,8 +95,12 @@ function showMenu() {
       { type: 'separator' },
       { label: '로그인할 때 자동으로 열기', type: 'checkbox', checked: login, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
       { type: 'separator' },
-      // 새 버전 확인: 앱이 인터넷에 접속하지 않고, 기본 브라우저로 릴리스 페이지만 연다
-      { label: `새 버전 확인… (지금 ${app.getVersion()})`, click: () => shell.openExternal(RELEASES_URL) },
+      // 새 버전: 있으면 '업데이트'가 켜진다 (누르면 받아서 바꾸고 다시 켠다)
+      upd.state === 'available'
+        ? { label: `업데이트 (${upd.version})…`, click: () => confirmUpdate() }
+        : upd.state === 'downloading' || upd.state === 'installing' || upd.state === 'restarting'
+          ? { label: `업데이트하는 중… ${Math.round(upd.progress * 100)}%`, enabled: false }
+          : { label: `새 버전 확인 (지금 ${app.getVersion()})`, click: () => checkFromMenu() },
       { label: '에이전트 작업실 종료', click: () => app.quit() },
     ]),
   );
@@ -265,20 +281,221 @@ function setRadio(s) {
   if (Number.isFinite(s.volume)) radio.volume = Math.max(0, Math.min(1, s.volume));
   if (typeof s.on === 'boolean') radio.on = s.on;
   srv?.saveRadio?.({ station: radio.station, volume: radio.volume });
+  if (radio.on && ytOn()) ytStop(); // 라디오를 켜면 YouTube는 끈다 (하나만 나오게)
   radioApply();
+}
+
+// ---------- YouTube 미니 플레이어: 링크를 넣으면 작업실 창 안 작은 칸에서 튼다 ----------
+// 퍼가기 플레이어는 음반사가 막아 둔 영상을 못 틀어서, YouTube 영상 페이지를 열고 플레이어만 보이게 줄인다.
+// 작업실 화면과 다른 세션(메모리에만, 앱을 끄면 쿠키도 사라진다)에서 돌고, 이 칸만 YouTube와 Google 서버에 접속할 수 있다.
+// 링크를 넣고 재생을 누를 때만 접속한다.
+let ytView = null;
+let ytHost = null;
+let ytSession = null;
+const YT_HOSTS =
+  /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|ytimg\.com|googlevideo\.com|ggpht\.com|gstatic\.com|googleapis\.com|googleusercontent\.com|google\.com|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$/;
+const isYouTubePage = (u) => {
+  try {
+    const x = new URL(u);
+    return x.protocol === 'https:' && /(^|\.)youtube\.com$/.test(x.hostname);
+  } catch {
+    return false;
+  }
+};
+// 영상 페이지에서 플레이어만 남기고 칸에 꽉 채운다 (제목, 댓글, 추천 영상, 위쪽 막대는 숨긴다)
+const YT_CSS = `
+html, body { overflow: hidden !important; background: #000 !important; }
+#masthead-container, ytd-masthead, tp-yt-app-drawer, ytd-mini-guide-renderer, #secondary, #below, #related, #comments, ytd-watch-metadata, #chat, #panels,
+.ytp-fullscreen-button, .ytp-size-button, .ytp-miniplayer-button, .ytp-remote-button, .ytp-pip-button { display: none !important; }
+/* Premium 안내 같은 팝업이 작은 칸을 덮지 않게 ('계속 시청하시겠어요?' 확인 창은 남긴다) */
+ytd-popup-container tp-yt-paper-dialog:not(:has(yt-confirm-dialog-renderer)), ytd-popup-container ytd-mealbar-promo-renderer, ytd-popup-container yt-mealbar-promo-renderer,
+ytd-popup-container tp-yt-iron-dropdown, tp-yt-iron-overlay-backdrop { display: none !important; }
+#movie_player { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 1000 !important; background: #000 !important; }
+#movie_player .html5-video-container, #movie_player video { width: 100vw !important; height: 100vh !important; left: 0 !important; top: 0 !important; }
+#movie_player video { object-fit: contain !important; }
+#movie_player .ytp-chrome-bottom { width: calc(100vw - 24px) !important; left: 12px !important; }
+`;
+// 앱 이름이 붙지 않은 보통 Chrome처럼 접속한다
+const YT_UA = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome.split('.')[0]}.0.0.0 Safari/537.36`;
+function getYtSession() {
+  if (ytSession) return ytSession;
+  ytSession = session.fromPartition('agent-office-youtube'); // 'persist:'가 없어서 앱을 끄면 쿠키도 사라진다
+  ytSession.setUserAgent(YT_UA);
+  ytSession.webRequest.onBeforeRequest((d, cb) => {
+    let ok = d.url.startsWith('data:') || d.url.startsWith('blob:');
+    try {
+      const u = new URL(d.url);
+      if ((u.protocol === 'https:' || u.protocol === 'wss:') && YT_HOSTS.test(u.hostname)) ok = true;
+    } catch {}
+    cb({ cancel: !ok });
+  });
+  // 카메라, 마이크, 위치, 알림 같은 권한은 모두 거절
+  ytSession.setPermissionRequestHandler((wc, perm, cb) => cb(false));
+  ytSession.setPermissionCheckHandler(() => false);
+  return ytSession;
+}
+function youtubeUrl({ list, v } = {}) {
+  const u = new URL('https://www.youtube.com/watch');
+  if (v) u.searchParams.set('v', v);
+  if (list) u.searchParams.set('list', list);
+  return u.href;
+}
+const ytOn = () => !!(ytView && !ytView.webContents.isDestroyed());
+function ytPlay(spec) {
+  if (!ytOn()) {
+    ytView = new WebContentsView({
+      webPreferences: {
+        session: getYtSession(),
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        spellcheck: false,
+        autoplayPolicy: 'no-user-gesture-required',
+        backgroundThrottling: false, // 칸을 접어도 계속 재생
+      },
+    });
+    ytView.setBackgroundColor('#000000');
+    ytView.setBorderRadius?.(10); // 음악 칸의 둥근 영상 자리에 맞춘다
+    const wc = ytView.webContents;
+    // YouTube 밖으로 나가는 링크는 기본 브라우저로
+    wc.on('will-navigate', (e, u) => {
+      if (isYouTubePage(u)) return;
+      e.preventDefault();
+      if (/^https?:\/\//.test(u)) shell.openExternal(u);
+    });
+    wc.setWindowOpenHandler(({ url: u }) => {
+      if (/^https?:\/\//.test(u)) shell.openExternal(u);
+      return { action: 'deny' };
+    });
+    wc.on('dom-ready', () => wc.insertCSS(YT_CSS).catch(() => {}));
+    wc.on('render-process-gone', () => ytStop());
+    // YouTube 페이지가 '나가시겠어요?'로 끄기를 막지 못하게
+    wc.on('will-prevent-unload', (e) => e.preventDefault());
+  }
+  if (radio.on) setRadio({ on: false }); // 하나만 나오게: 작업실 라디오는 끈다
+  ytView.webContents.loadURL(youtubeUrl(spec)).catch(() => {}); // YouTube가 주소를 바꾸며 다시 불러오면 첫 요청은 취소로 끝난다
+}
+// 작업실 창 안 음악 칸의 영상 자리에 겹쳐 보인다 (rect는 창 안 좌표)
+function ytShow(rect) {
+  if (!ytOn() || !win || win.isDestroyed()) return;
+  if (ytHost !== win) {
+    ytHide();
+    win.contentView.addChildView(ytView);
+    ytHost = win;
+  }
+  const z = win.webContents.getZoomFactor() || 1;
+  ytView.setBounds({ x: Math.round(rect.x * z), y: Math.round(rect.y * z), width: Math.round(rect.w * z), height: Math.round(rect.h * z) });
+}
+// 칸을 접으면 화면에서만 뺀다 (소리는 계속 난다)
+function ytHide() {
+  if (ytView && ytHost && !ytHost.isDestroyed()) ytHost.contentView.removeChildView(ytView);
+  ytHost = null;
+}
+function ytStop() {
+  ytHide();
+  const wc = ytOn() ? ytView.webContents : null;
+  ytView = null;
+  if (!wc) return;
+  // 소리부터 바로 끄고, 재생을 멈춘 뒤 페이지를 닫는다
+  wc.setAudioMuted(true);
+  wc.executeJavaScript("document.querySelectorAll('video, audio').forEach((m) => m.pause())").catch(() => {});
+  wc.close({ waitForBeforeUnload: false });
+}
+function ytState() {
+  if (!ytOn()) return { on: false, title: '' };
+  const t = ytView.webContents.getTitle().replace(/^\(\d+\)\s*/, '').replace(/\s*-\s*YouTube$/, '');
+  return { on: true, title: /^(YouTube|www\.youtube\.com.*|https?:.*)$/.test(t) ? '' : t.slice(0, 120) };
+}
+function ytControl(action, data) {
+  if (action === 'play') return ytPlay(data);
+  if (action === 'show') return ytShow(data);
+  if (action === 'hide') return ytHide();
+  if (action === 'stop') return ytStop();
+}
+
+// ---------- 새 버전과 업데이트 버튼 (updater.js) ----------
+// 켤 때와 3시간마다 GitHub에 새 버전이 있는지만 물어본다. 있으면 업데이트 버튼이 켜지고, 누를 때만 받아서 바꾼다.
+let upd = { state: 'idle', version: '', notes: [], progress: 0, error: '' }; // idle | latest | available | downloading | installing | restarting
+let updInfo = null;
+const updBusy = () => ['downloading', 'installing', 'restarting'].includes(upd.state);
+async function updCheck(manual) {
+  if (updBusy()) return upd;
+  try {
+    const r = await updater.check(app.getVersion());
+    updInfo = r.state === 'available' ? r.info : null;
+    upd = updInfo
+      ? { state: 'available', version: updInfo.version, notes: updInfo.notes, progress: 0, error: '' }
+      : { state: 'latest', version: '', notes: [], progress: 0, error: '' };
+  } catch {
+    if (manual) upd = { ...upd, error: '새 버전을 확인하지 못했어요. 인터넷 연결을 확인해 주세요' };
+  }
+  return upd;
+}
+async function updInstall() {
+  if (!updInfo || updBusy()) return upd;
+  if (!app.isPackaged) return (upd = { ...upd, error: '개발 중에는 업데이트하지 않아요' });
+  upd = { ...upd, state: 'downloading', progress: 0, error: '' };
+  try {
+    await updater.install(updInfo, (p) => {
+      upd.progress = p;
+      if (p >= 1) upd.state = 'installing';
+    });
+    upd = { ...upd, state: 'restarting', progress: 1 };
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 700);
+  } catch (e) {
+    // 앱 위치가 잠겨 있으면(예: 다운로드 폴더에서 바로 실행) 내려받는 페이지를 연다
+    const noWrite = e.code === 'NO_WRITE' || e.code === 'EPERM' || e.code === 'EACCES';
+    upd = { ...upd, state: 'available', progress: 0, error: noWrite ? '앱이 스스로 바꿀 수 없는 위치예요. 내려받는 페이지를 열었어요' : '업데이트하지 못했어요. 잠시 뒤 다시 해 주세요' };
+    if (noWrite) shell.openExternal(RELEASES_URL);
+  }
+  return upd;
+}
+async function confirmUpdate() {
+  if (!updInfo) return;
+  const r = await dialog.showMessageBox({
+    type: 'info',
+    message: `에이전트 작업실 ${updInfo.version}으로 업데이트할까요?`,
+    detail: [...updInfo.notes.map((n) => `• ${n}`), '', `지금 ${app.getVersion()} · 앱이 잠깐 꺼졌다가 다시 켜져요.`].join('\n').trim(),
+    buttons: ['업데이트', '나중에'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (r.response === 0) updInstall();
+}
+async function checkFromMenu() {
+  await updCheck(true);
+  if (upd.state === 'available') return confirmUpdate();
+  dialog.showMessageBox({ type: 'info', message: upd.error || `최신 버전이에요 (${app.getVersion()})`, buttons: ['확인'] });
+}
+function updAction(action) {
+  if (action === 'check') return updCheck(true);
+  if (action === 'install') {
+    updInstall(); // 받는 동안 기다리지 않는다 (진행률은 상태로 알린다)
+    return upd;
+  }
+  return upd;
+}
+
+// 전체화면에서는 신호등 버튼이 사라지니, 그 자리를 비워 두지 않게 화면에 알려 준다
+function syncFullScreen() {
+  if (win && !win.isDestroyed()) win.webContents.executeJavaScript(`document.body.classList.toggle('fs', ${win.isFullScreen()})`).catch(() => {});
 }
 
 function showWindow(opts) {
   const look = opts?.look === true;
   const setup = Number(opts?.setup) || 0;
-  const music = opts?.music === true;
+  // music: true(마지막에 보던 칸) 또는 'radio' | 'yt'
+  const music = opts?.music === true ? 'last' : ['radio', 'yt'].includes(opts?.music) ? opts.music : '';
   pop?.hide();
   if (win) {
     win.show();
     win.focus();
     if (look) win.webContents.executeJavaScript('window.openLookFromMain && window.openLookFromMain()').catch(() => {});
     if (setup) win.webContents.executeJavaScript(`window.openSetupFromMain && window.openSetupFromMain(${setup})`).catch(() => {});
-    if (music) win.webContents.executeJavaScript('window.openMusicFromMain && window.openMusicFromMain()').catch(() => {});
+    if (music) win.webContents.executeJavaScript(`window.openMusicFromMain && window.openMusicFromMain(${JSON.stringify(music)})`).catch(() => {});
     return;
   }
   win = new BrowserWindow({
@@ -295,11 +512,15 @@ function showWindow(opts) {
   });
   openLinksOutside(win);
   win.once('ready-to-show', () => win.show());
+  win.on('close', () => ytHide()); // 창을 닫아도 YouTube는 계속 (상단바 메뉴에서 끈다)
   win.on('closed', () => {
     win = null;
     updateDock();
   });
-  win.loadURL(look ? `${baseUrl}&open=look` : setup ? `${baseUrl}&open=setup&step=${setup}` : music ? `${baseUrl}&open=music` : baseUrl);
+  win.on('enter-full-screen', syncFullScreen);
+  win.on('leave-full-screen', syncFullScreen);
+  win.webContents.on('did-finish-load', syncFullScreen);
+  win.loadURL(look ? `${baseUrl}&open=look` : setup ? `${baseUrl}&open=setup&step=${setup}` : music ? `${baseUrl}&open=music&tab=${music}` : baseUrl);
   updateDock();
 }
 
@@ -348,10 +569,18 @@ app.whenReady().then(async () => {
     badge: setUnread,
     openWindow: showWindow,
     radio: (s) => setRadio(s),
+    youtube: ytControl,
+    youtubeState: ytState,
+    update: updAction,
+    updateState: () => ({ ...upd, current: app.getVersion() }),
     radioState: () => ({ ...radio }),
     showMenu: () => showMenu(),
   });
   baseUrl = srv.url;
+  // 지난 업데이트에서 남은 예전 앱을 치우고, 조금 뒤 새 버전을 확인한다 (그 뒤로 3시간마다)
+  updater.cleanup();
+  setTimeout(() => updCheck(false), 20000);
+  setInterval(() => updCheck(false), 3 * 3600 * 1000);
   const savedRadio = srv.getSettings().radio || {};
   if (STATIONS.some(([id]) => id === savedRadio.station)) radio.station = savedRadio.station;
   if (Number.isFinite(savedRadio.volume)) radio.volume = Math.max(0, Math.min(1, savedRadio.volume));

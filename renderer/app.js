@@ -437,6 +437,12 @@ function nearestAct() {
       best = { kind: 'agent', agent: a, label: `${short(nameOf(a.data), 12)} 보기` };
     }
   }
+  // 문 앞: 다른 맵으로
+  const door = room.spots.find((s) => s.kind === 'door');
+  if (door) {
+    const d = Math.hypot(door.x - me.x, door.z - me.z);
+    if (d < 1.1 && d < bd) best = { kind: 'door', label: '맵 이동하기' };
+  }
   return best;
 }
 function interact() {
@@ -446,6 +452,7 @@ function interact() {
   else if (it.kind === 'stand') meStand();
   else if (it.kind === 'seat') meSit(it.seat);
   else if (it.kind === 'kick') kickBall();
+  else if (it.kind === 'door') toggleDoor(true);
   else if (it.kind === 'agent') {
     const p = projectToScreen(it.agent.x, 1.2, it.agent.z);
     showCard({ agent: it.agent }, p.x, p.y);
@@ -1032,6 +1039,8 @@ function sync(st) {
   lastState = st;
   applySettings(st.settings);
   showRadio(st.radio);
+  showYT(st.youtube);
+  showUpd(st.update);
   const first = !synced;
   const now = Date.now();
   // 이번에 새로 들어온 보고 (이 에이전트는 숨김 설정이어도 걸어와서 보고한다)
@@ -1433,7 +1442,34 @@ if (room.pitch) {
   $('fkBtn').hidden = false;
   $('hint').insertAdjacentHTML('beforeend', ' · <kbd>K</kbd> 프리킥');
 }
-$('mapSel').onchange = (e) => api('/api/settings', { map: e.target.value }).then(() => location.reload());
+$('mapSel').onchange = (e) => goMap(e.target.value);
+// 맵을 바꾸면 화면을 잠깐 어둡게 했다가 새 맵을 연다
+function goMap(id) {
+  if (!['office', 'cafe', 'stadium', 'paris'].includes(id)) return;
+  $('mapFade').hidden = false;
+  requestAnimationFrame(() => $('mapFade').classList.add('on'));
+  setTimeout(() => api('/api/settings', { map: id }).then(() => location.reload()), 280);
+}
+// ---------- 문 앞에서 F: 맵 이동하기 ----------
+let doorOpen = false;
+function toggleDoor(force) {
+  doorOpen = force ?? !doorOpen;
+  $('doorPanel').hidden = !doorOpen;
+  if (!doorOpen) return UI.closeLayer('door');
+  for (const b of document.querySelectorAll('#doorMaps .mapc')) {
+    const here = b.dataset.map === MAP_ID;
+    b.disabled = here;
+    b.setAttribute('aria-current', String(here));
+    b.querySelector('small').textContent = here ? '지금 여기' : b.dataset.desc;
+  }
+  UI.openLayer('door', () => toggleDoor(false));
+  setTimeout(() => document.querySelector('#doorMaps .mapc:not(:disabled)')?.focus(), 30);
+}
+for (const b of document.querySelectorAll('#doorMaps .mapc')) {
+  b.dataset.desc = b.querySelector('small').textContent;
+  b.onclick = () => goMap(b.dataset.map);
+}
+$('doorClose').onclick = () => toggleDoor(false);
 $('conn').onclick = () => openSetupModal(2);
 $('tutBtn').onclick = () => openSetupModal(1);
 
@@ -2138,6 +2174,8 @@ $('restClose').onclick = () => toggleRest(false);
 document.addEventListener('pointerdown', (e) => {
   if (restOpen && !e.target.closest('#restPanel, #hideBtn, #mHide')) toggleRest(false);
   if (musicPanelOpen && !e.target.closest('#musicPanel, #musicBtn')) toggleMusicPanel(false);
+  if (doorOpen && !e.target.closest('#doorPanel, #act')) toggleDoor(false);
+  if (updOpen && !e.target.closest('#updPanel, #updBtn')) toggleUpd(false);
 });
 
 // ---------- 작업실 라디오: '음악' 버튼 아래 작은 팝업 (소리는 main.js의 숨은 창에서 만든다) ----------
@@ -2155,9 +2193,13 @@ function toggleMusicPanel(force) {
   musicPanelOpen = force ?? !musicPanelOpen;
   $('musicPanel').hidden = !musicPanelOpen;
   $('musicBtn').setAttribute('aria-expanded', String(musicPanelOpen));
-  if (!musicPanelOpen) return UI.closeLayer('music');
+  if (!musicPanelOpen) {
+    hideYT();
+    return UI.closeLayer('music');
+  }
   placeMusicPanel();
   showRadio(radioNow, true);
+  setMusicTab(musicTab);
   UI.openLayer('music', () => toggleMusicPanel(false), false);
 }
 const STATION_KO = { lofi: '로파이', piano: '피아노', rain: '빗소리', focus: '집중 소음' };
@@ -2166,8 +2208,7 @@ function showRadio(r, force) {
   // 방금 직접 바꿨으면 서버 값이 따라올 때까지 잠깐 기다린다 (슬라이더가 튀지 않게)
   if (!force && Date.now() - radioTouched < 1500) return;
   radioNow = { on: !!r.on, station: r.station || 'lofi', volume: Number.isFinite(r.volume) ? r.volume : 0.6 };
-  $('musicBtn').setAttribute('aria-pressed', String(radioNow.on));
-  $('musicState').textContent = radioNow.on ? `${STATION_KO[radioNow.station] || ''} 재생 중` : '';
+  updateMusicBtn();
   for (const b of document.querySelectorAll('#musicPanel .rst')) b.setAttribute('aria-pressed', String(b.dataset.st === radioNow.station));
   $('radioPlay').textContent = radioNow.on ? '멈춤' : '재생';
   $('radioVol').value = String(Math.round(radioNow.volume * 100));
@@ -2190,9 +2231,127 @@ $('radioVol').oninput = (e) => {
   clearTimeout(volTimer);
   volTimer = setTimeout(() => api('/api/radio', { volume: v }).catch(() => {}), 80);
 };
-addEventListener('resize', () => musicPanelOpen && placeMusicPanel());
-window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴에서 부른다
-if (!MINI && q.get('open') === 'music') setTimeout(() => toggleMusicPanel(true), 500);
+addEventListener('resize', () => {
+  if (!musicPanelOpen) return;
+  placeMusicPanel();
+  placeYT();
+});
+// ---------- 음악 칸의 탭: 작업실 라디오 / YouTube ----------
+let musicTab = localStorage.getItem('musicTab') === 'yt' ? 'yt' : 'radio';
+function setMusicTab(tab) {
+  musicTab = tab;
+  localStorage.setItem('musicTab', tab);
+  for (const b of document.querySelectorAll('#musicPanel .mtab')) b.setAttribute('aria-selected', String(b.dataset.src === tab));
+  $('radioView').hidden = tab !== 'radio';
+  $('ytView').hidden = tab !== 'yt';
+  if (tab === 'yt' && musicPanelOpen) {
+    placeYT();
+    if (!ytNow.on) {
+      if (!$('ytUrl').value) $('ytUrl').value = localStorage.getItem('ytUrl') || '';
+      setTimeout(() => $('ytUrl').focus(), 60);
+    }
+  } else hideYT();
+}
+function updateMusicBtn() {
+  $('musicBtn').setAttribute('aria-pressed', String(radioNow.on || ytNow.on));
+  $('musicState').textContent = radioNow.on ? `${STATION_KO[radioNow.station] || ''} 재생 중` : ytNow.on ? 'YouTube 재생 중' : '';
+}
+// ---------- YouTube 칸: 링크를 넣으면 영상 칸에 작게 튼다 (칸을 접어도 소리는 계속) ----------
+let ytNow = { on: false, title: '' };
+let ytTouched = 0;
+function placeYT() {
+  if (!musicPanelOpen || musicTab !== 'yt' || !ytNow.on) return;
+  const r = $('ytStage').getBoundingClientRect();
+  if (r.width < 10 || r.height < 10) return;
+  api('/api/youtube', { action: 'show', rect: { x: Math.max(0, r.left), y: Math.max(0, r.top), w: r.width, h: r.height } }).catch(() => {});
+}
+function hideYT() {
+  if (ytNow.on) api('/api/youtube', { action: 'hide' }).catch(() => {});
+}
+function showYT(y, force) {
+  if (!y || (!force && Date.now() - ytTouched < 2500)) return;
+  const turnedOn = !!y.on && !ytNow.on;
+  ytNow = { on: !!y.on, title: y.title || '' };
+  $('ytStage').classList.toggle('on', ytNow.on);
+  $('ytFoot').hidden = !ytNow.on;
+  $('ytTitle').textContent = ytNow.title || '불러오는 중…';
+  $('ytTitle').title = ytNow.title;
+  updateMusicBtn();
+  if (turnedOn) placeYT();
+}
+$('ytForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const url = $('ytUrl').value.trim();
+  if (!url) return $('ytUrl').focus();
+  const r = await api('/api/youtube', { action: 'play', url }).catch(() => null);
+  $('ytErr').hidden = !!r?.ok;
+  if (!r?.ok) return;
+  localStorage.setItem('ytUrl', url);
+  ytTouched = Date.now();
+  radioNow.on = false; // 라디오는 main이 끈다
+  showRadio(radioNow, true);
+  showYT({ on: true, title: '' }, true);
+  placeYT();
+};
+$('ytUrl').oninput = () => ($('ytErr').hidden = true);
+$('ytStop').onclick = () => {
+  ytTouched = Date.now();
+  api('/api/youtube', { action: 'stop' }).catch(() => {});
+  showYT({ on: false }, true);
+};
+$('musicPanel').addEventListener('animationend', placeYT);
+for (const b of document.querySelectorAll('#musicPanel .mtab')) b.onclick = () => setMusicTab(b.dataset.src);
+// ---------- 업데이트 버튼: 새 버전이 있을 때만 켜진다 (누르면 받아서 바꾸고 앱이 다시 켜진다) ----------
+let updNow = { state: 'idle' };
+let updOpen = false;
+function placeUpdPanel() {
+  const b = $('updBtn').getBoundingClientRect();
+  $('updPanel').style.top = `${Math.round(b.bottom + 8)}px`;
+  $('updPanel').style.right = `${Math.max(10, Math.round(innerWidth - b.right))}px`;
+}
+function toggleUpd(force) {
+  updOpen = force ?? !updOpen;
+  $('updPanel').hidden = !updOpen;
+  if (!updOpen) return UI.closeLayer('upd');
+  placeUpdPanel();
+  UI.openLayer('upd', () => toggleUpd(false), false);
+}
+function showUpd(u) {
+  if (!u) return;
+  updNow = u;
+  const busy = ['downloading', 'installing', 'restarting'].includes(u.state);
+  const on = u.state === 'available' || busy;
+  $('updBtn').hidden = !on || MINI;
+  if (!on) {
+    if (updOpen) toggleUpd(false);
+    return;
+  }
+  const pct = Math.round((u.progress || 0) * 100);
+  $('updBtn').querySelector('.w').textContent = busy ? `업데이트 ${pct}%` : '업데이트';
+  $('updVer').textContent = u.current ? `${u.current} → ${u.version}` : u.version;
+  $('updNotes').innerHTML = (u.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
+  $('updNotes').hidden = !(u.notes || []).length;
+  $('updBar').hidden = !busy;
+  $('updBar').querySelector('i').style.width = `${pct}%`;
+  $('updGo').disabled = busy;
+  $('updGo').textContent =
+    u.state === 'downloading' ? `받는 중 ${pct}%` : u.state === 'installing' ? '설치하는 중…' : u.state === 'restarting' ? '다시 켜는 중…' : '업데이트';
+  $('updErr').hidden = !u.error;
+  $('updErr').textContent = u.error || '';
+}
+$('updBtn').onclick = () => toggleUpd();
+$('updClose').onclick = () => toggleUpd(false);
+$('updGo').onclick = () =>
+  api('/api/update', { action: 'install' })
+    .then((r) => r?.update && showUpd({ ...updNow, ...r.update }))
+    .catch(() => {});
+addEventListener('resize', () => updOpen && placeUpdPanel());
+// 상단바 메뉴에서 부른다 (tab: 'radio' | 'yt', 없으면 마지막에 보던 칸)
+window.openMusicFromMain = (tab) => {
+  if (['radio', 'yt'].includes(tab)) musicTab = tab;
+  toggleMusicPanel(true);
+};
+if (!MINI && q.get('open') === 'music') setTimeout(() => window.openMusicFromMain(q.get('tab')), 500);
 
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
 if (q.get('debug') === '1') window.__ao = { agents, me, used, room, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard };

@@ -449,3 +449,65 @@ body.mini #fkBar small { display: none; }
 .rbox .md th { background: rgba(35, 43, 42, .05); font-weight: 600; }
 .rbox .md hr { margin: 10px 0; border: 0; border-top: 1px solid var(--line); }
 .rbox .md a { color: #2F6E5E; text-decoration: underline; }
+
+/* ---------- 음악 팝업: 작업실 라디오 / YouTube 탭 ---------- */
+.mtabs { display: flex; gap: 4px; margin: 0 14px 10px; padding: 3px; border-radius: 10px; background: var(--card-2); }
+.mtab { flex: 1; padding: 6px 0; border: 0; border-radius: 8px; background: none; color: var(--muted); font: 600 13px var(--body); cursor: pointer; }
+.mtab[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+
+/* ---------- YouTube 칸: 링크 입력과 16:9 영상 칸 ---------- */
+#ytView { display: grid; gap: 10px; padding: 0 14px 14px; }
+#ytView[hidden] { display: none; }
+.ytform { display: flex; gap: 8px; }
+.ytform input { flex: 1; min-width: 0; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font: 13.5px var(--body); }
+.ytform input:focus { outline: none; border-color: var(--accent); }
+.yterr { margin: -4px 2px 0; color: #C2410C; font-size: 12px; }
+.ytstage { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; border-radius: 10px; background: #1B1F1E; color: rgba(255, 255, 255, .62); font-size: 12px; line-height: 1.6; text-align: center; overflow: hidden; }
+.ytstage.on span { display: none; }
+.ytfoot { display: flex; align-items: center; gap: 10px; }
+.ytfoot small { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+#musicPanel .phead small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 문 앞 맵 이동하기 ---------- */
+#doorPanel { left: calc(50% - 210px); bottom: 96px; width: 420px; }
+body.mini #doorPanel { left: 10px; right: 10px; bottom: 70px; width: auto; }
+.dmaps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 14px 14px; }
+#doorPanel .mapc { display: grid; justify-items: start; gap: 2px; padding: 10px; border: 0; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--line); text-align: left; cursor: pointer; }
+#doorPanel .mapc:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--accent); }
+#doorPanel .mapc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#doorPanel .mapc:disabled { cursor: default; opacity: .62; }
+#doorPanel .mapc b { font: 17px var(--hand); color: var(--ink); }
+#doorPanel .mapc small { color: var(--muted); font-size: 11.5px; }
+#doorPanel .mapc[aria-current="true"] small { color: var(--accent); font-weight: 600; }
+#doorPanel .mart { position: relative; width: 100%; height: 56px; margin-bottom: 4px; border-radius: 10px; overflow: hidden; }
+#doorPanel .mart.office { background: linear-gradient(180deg, #F1EDE4 0 38%, #A8C5B2 38% 52%, #DED6C6 52%); }
+#doorPanel .mart.cafe { background: linear-gradient(180deg, #B9694C 0 38%, #6E4B33 38% 52%, #C9A27A 52%); }
+#doorPanel .mart.stadium { background: linear-gradient(180deg, #D2D6DB 0 30%, #4C9A50 30% 100%); }
+#doorPanel .mart.paris { background: linear-gradient(180deg, #EADFCB 0 34%, #234A3A 34% 46%, #D9D2C5 46% 70%, #5E6167 70%); }
+#doorPanel .mart i { position: absolute; bottom: 9px; width: 16px; height: 16px; border-radius: 50%; }
+#doorPanel .mart i:nth-child(1) { left: 18%; background: #3D6FD8; }
+#doorPanel .mart i:nth-child(2) { left: 45%; background: #E07A5F; }
+#doorPanel .mart i:nth-child(3) { left: 72%; background: #FF8A3D; box-shadow: 0 0 0 3px #fff; }
+#doorPanel .mart.office::after { content: ''; position: absolute; left: 12%; right: 12%; bottom: 20px; height: 9px; border-radius: 4px; background: #D9B98F; }
+#doorPanel .mart.cafe::after { content: ''; position: absolute; left: 30%; width: 22px; bottom: 22px; height: 22px; border-radius: 50%; background: #F1EDE6; box-shadow: 46px 0 0 #F1EDE6; }
+#doorPanel .mart.stadium::after { content: ''; position: absolute; left: 50%; top: 30%; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, .85); }
+#doorPanel .mart.paris::after { content: ''; position: absolute; right: 10%; top: 4px; width: 14px; height: 26px; background: #CDBFA6; box-shadow: 0 -10px 0 -3px #56616B; }
+#mapFade { position: fixed; inset: 0; z-index: 60; background: #16302B; opacity: 0; transition: opacity .26s ease-in; pointer-events: none; }
+#mapFade.on { opacity: 1; }
+
+/* ---------- 전체화면: 신호등 버튼이 없으니 왼쪽 여백을 비우지 않는다 ---------- */
+body.fs:not(.mini) #placeHud { left: 18px; }
+
+/* ---------- 업데이트: 새 버전이 있을 때만 보이는 버튼과 작은 창 ---------- */
+body:not(.mini) #topRight #updBtn { background: var(--accent); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+body:not(.mini) #topRight #updBtn:hover { background: var(--accent); filter: brightness(1.06); }
+#updBtn .i { color: #fff; }
+#updPanel { width: 300px; }
+.updnotes { margin: 2px 0 0; padding: 0 16px 4px 34px; color: var(--ink); font-size: 13px; line-height: 1.6; }
+.updnotes[hidden] { display: none; }
+.updbar { height: 6px; margin: 8px 16px 2px; border-radius: 3px; background: var(--card-2); overflow: hidden; }
+.updbar[hidden] { display: none; }
+.updbar i { display: block; width: 0; height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
+.upderr { margin: 8px 16px 0; color: #C2410C; font-size: 12px; line-height: 1.5; }
+.updnote { color: var(--muted); font-size: 12px; }
+#updPanel .pfoot { margin-top: 10px; }

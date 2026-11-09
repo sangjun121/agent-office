@@ -30,6 +30,30 @@ const DEFAULTS = {
 const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris']);
 
 const RADIO_STATIONS = new Set(['lofi', 'piano', 'rain', 'focus']);
+
+// YouTube 주소에서 재생목록(list)과 영상(v) 아이디만 꺼낸다. 다른 주소는 받지 않는다.
+const YT_V = /^[A-Za-z0-9_-]{11}$/;
+const YT_LIST = /^[A-Za-z0-9_-]{10,80}$/;
+function parseYouTube(input) {
+  const s = String(input || '').trim().slice(0, 500);
+  let u;
+  try {
+    u = new URL(/^[a-z]+:\/\//i.test(s) ? s : `https://${s}`);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  const host = u.hostname.toLowerCase().replace(/^(www|m|music)\./, '');
+  let v = '';
+  if (host === 'youtu.be') v = u.pathname.split('/')[1] || '';
+  else if (host === 'youtube.com') v = u.searchParams.get('v') || (/^\/(shorts|live|embed)\//.test(u.pathname) ? u.pathname.split('/')[2] || '' : '');
+  else return null;
+  const out = {};
+  const list = u.searchParams.get('list') || '';
+  if (YT_LIST.test(list)) out.list = list;
+  if (YT_V.test(v)) out.v = v;
+  return out.list || out.v ? out : null;
+}
 function loadSettings(file) {
   try {
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -134,6 +158,10 @@ function startServer({
   setLoginItem,
   radio, // ({ on, station, volume }): 작업실 라디오 켜고 끄기, 채널과 볼륨
   radioState, // () => { on, station, volume }
+  youtube, // ('play', { list, v }) | ('show', rect) | ('hide') | ('stop'): 작업실 창 안 YouTube 미니 플레이어
+  youtubeState, // () => { on, title }
+  update, // ('check') | ('install'): 새 버전 확인, 업데이트
+  updateState, // () => { state, version, notes, progress, error, current }
   fixture,
   fixtureDetect,
 } = {}) {
@@ -233,6 +261,8 @@ function startServer({
             agentNames: settings.agentNames,
           },
           radio: radioState?.() || { on: false, station: settings.radio?.station || 'lofi', volume: settings.radio?.volume ?? 0.6 },
+          youtube: youtubeState?.() || { on: false, title: '' },
+          update: updateState?.() || { state: 'idle' },
           agents: s.agents.map(withKey),
           reports: s.reports.map(withKey),
           ...staff.view(),
@@ -307,6 +337,30 @@ function startServer({
       if (p === '/api/open-window') {
         openWindow?.({ look: body.look === true, setup: Number(body.setup) || 0 });
         return json(res, 200, { ok: !!openWindow });
+      }
+      if (p === '/api/update') {
+        if (!['check', 'install'].includes(body.action)) return json(res, 400, { ok: false });
+        if (!update) return json(res, 200, { ok: false });
+        const r = await update(body.action);
+        return json(res, 200, { ok: true, update: { ...r } });
+      }
+      if (p === '/api/youtube') {
+        if (body.action === 'stop' || body.action === 'hide') {
+          youtube?.(body.action);
+          return json(res, 200, { ok: !!youtube });
+        }
+        if (body.action === 'show') {
+          const r = body.rect || {};
+          const n = (v, max) => Number.isFinite(v) && v >= 0 && v <= max;
+          if (!(n(r.x, 8000) && n(r.y, 8000) && n(r.w, 4000) && n(r.h, 4000))) return json(res, 400, { ok: false });
+          youtube?.('show', { x: r.x, y: r.y, w: r.w, h: r.h });
+          return json(res, 200, { ok: !!youtube });
+        }
+        if (body.action !== 'play') return json(res, 400, { ok: false });
+        const yt = parseYouTube(body.url);
+        if (!yt) return json(res, 400, { ok: false, error: 'bad-url' });
+        youtube?.('play', yt);
+        return json(res, 200, { ok: !!youtube });
       }
       if (p === '/api/radio') {
         const r = {};
