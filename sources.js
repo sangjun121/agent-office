@@ -22,12 +22,15 @@ const CLAUDE_APP = {
   'sdk-cli': 'Claude SDK',
   'sdk-py': 'Claude SDK',
 };
+// 어느 앱에서 돌린 Codex인지: 실행한 쪽(originator)을 먼저 본다.
+// Codex 데스크톱 앱은 source를 'vscode'로 남겨서, source만 보면 VS Code로 잘못 나온다.
 function codexApp(originator = '', source = '') {
-  const o = `${originator} ${source}`.toLowerCase();
-  if (o.includes('orca')) return 'Orca';
-  if (o.includes('vscode') || o.includes('code_ext')) return 'VS Code Codex';
-  if (o.includes('desktop') || o.includes('app')) return 'Codex 앱';
-  if (o.includes('cli') || o.includes('exec')) return '터미널 Codex';
+  const o = String(originator).toLowerCase();
+  const s = String(source).toLowerCase();
+  if (o.includes('orca') || s.includes('orca')) return 'Orca';
+  if (o.includes('desktop') || o === 'codex_app' || o.includes('codex app')) return 'Codex 앱';
+  if (o.includes('vscode') || o.includes('code_ext') || s.includes('vscode')) return 'VS Code Codex';
+  if (o.includes('cli') || o.includes('exec') || s === 'cli' || s === 'exec') return '터미널 Codex';
   return 'Codex';
 }
 
@@ -154,13 +157,14 @@ function claudeAgent(file, st, meta) {
 }
 
 // ---------- Codex ----------
+const TURN_EVENT = /^(task|turn)_(started|complete|completed|aborted)$/;
 function codexAgent(file, st, meta) {
   if (!meta.id) {
     const head = parseLines(readRange(file, 0, Math.min(st.size, 256 * 1024)), false);
     const sm = head.find((j) => j.type === 'session_meta');
     Object.assign(meta, { id: sm?.payload?.id || base(file), cwd: sm?.payload?.cwd || '', originator: sm?.payload?.originator || '', source: sm?.payload?.source || '' });
   }
-  const lines = tailLines(file, st.size, (ls) => ls.some((j) => j.type === 'event_msg' && /^task_|turn_aborted/.test(j.payload?.type || '')));
+  const lines = tailLines(file, st.size, (ls) => ls.some((j) => j.type === 'event_msg' && TURN_EVENT.test(j.payload?.type || '')));
   let state = null;
   let interrupted = false;
   let message = '';
@@ -169,15 +173,15 @@ function codexAgent(file, st, meta) {
   for (let i = lines.length - 1; i >= 0; i--) {
     const p = lines[i].type === 'event_msg' ? lines[i].payload || {} : null;
     if (!p) continue;
-    if (p.type === 'task_complete') {
+    if (p.type === 'task_complete' || p.type === 'turn_complete' || p.type === 'turn_completed') {
       state = 'done';
       message = p.last_agent_message || '';
       startedAt = ts(lines[i].timestamp);
-    } else if (p.type === 'turn_aborted') {
+    } else if (p.type === 'turn_aborted' || p.type === 'task_aborted') {
       state = 'done';
       interrupted = true;
       startedAt = ts(lines[i].timestamp);
-    } else if (p.type === 'task_started') {
+    } else if (p.type === 'task_started' || p.type === 'turn_started') {
       state = 'working';
       startedAt = ts(lines[i].timestamp);
     } else continue;
@@ -286,23 +290,32 @@ function scanClaude(now) {
   return out;
 }
 
+// Codex는 대화를 처음 시작한 날짜 폴더(YYYY/MM/DD)에 기록을 계속 쌓는다.
+// 며칠 전에 시작한 대화를 이어서 써도 보이게 최근 30일 폴더를 다 본다 (지난 폴더 목록은 5분마다만 다시 읽는다).
+const CODEX_DAYS = 30;
+const codexDirs = new Map(); // 폴더 → { at, names }
 function scanCodex(now) {
   const out = [];
-  for (const k of [0, 1]) {
+  for (let k = 0; k < CODEX_DAYS; k++) {
     const d = new Date(now - k * 86400000);
     const dir = path.join(CODEX_DIR, String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0'));
-    let names = [];
-    try {
-      names = fs.readdirSync(dir);
-    } catch {
-      continue;
+    const c = codexDirs.get(dir);
+    let names;
+    if (k > 1 && c && now - c.at < 5 * 60000) names = c.names;
+    else {
+      try {
+        names = fs.readdirSync(dir).filter((n) => n.endsWith('.jsonl'));
+      } catch {
+        names = [];
+      }
+      codexDirs.set(dir, { at: now, names });
     }
     for (const n of names) {
-      if (!n.endsWith('.jsonl')) continue;
       const a = visit(path.join(dir, n), now, codexAgent);
       if (a) out.push(a);
     }
   }
+  if (codexDirs.size > CODEX_DAYS * 2) for (const k of [...codexDirs.keys()].slice(0, codexDirs.size - CODEX_DAYS)) codexDirs.delete(k);
   return out;
 }
 
