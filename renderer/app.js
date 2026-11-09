@@ -837,7 +837,96 @@ function reportSpot(a) {
   }
   return { x: clamp(me.x + 1, 0.5, W - 0.5), z: clamp(me.z, 0.5, D - 0.5) };
 }
-const clean = (s) => String(s || '').replace(/[*`#>_~|]/g, '').replace(/\s+/g, ' ').trim();
+// 미리보기(보고함 한 줄, 말풍선, 카드)용: 마크다운 기호를 빼고 글만
+const clean = (s) =>
+  String(s || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*\|?\s*:?-{3,}[-|:\s]*$/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^\s*(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/\*\*|~~|[*`|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+// 보고 자세히: 에이전트 답변을 마크다운 서식으로 보여 준다.
+// 먼저 모든 글을 이스케이프하고, 정해 둔 서식(굵게, 기울임, 코드, 목록, 표, 제목, 인용, 링크)만 태그로 바꾼다.
+function mdInline(t) {
+  const codes = [];
+  let h = esc(String(t).replace(/\u0000/g, '')).replace(/`([^`]+)`/g, (_, c) => {
+    codes.push(c);
+    return `\u0000${codes.length - 1}\u0000`;
+  });
+  h = h
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<i>$2</i>')
+    .replace(/~~([^~]+)~~/g, '<s>$1</s>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return h.replace(/\u0000(\d+)\u0000/g, (_, k) => `<code>${codes[k]}</code>`);
+}
+const MD_LIST = /^\s*([-*+]|\d+[.)])\s+/;
+function md(src) {
+  const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let i = 0;
+  const isRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
+      i++;
+      out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);
+      continue;
+    }
+    if (isRow(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => mdInline(c.trim()));
+      const head = cells(l);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && isRow(lines[i])) rows.push(cells(lines[i++]));
+      out.push(`<table><thead><tr>${head.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+      continue;
+    }
+    const hd = l.match(/^\s*#{1,6}\s+(.*)$/);
+    if (hd) {
+      out.push(`<p class="mdh">${mdInline(hd[1])}</p>`);
+      i++;
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)) {
+      out.push('<hr>');
+      i++;
+      continue;
+    }
+    if (/^\s*>/.test(l)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, ''));
+      out.push(`<blockquote>${buf.map(mdInline).join('<br>')}</blockquote>`);
+      continue;
+    }
+    if (MD_LIST.test(l)) {
+      const ordered = /^\s*\d+[.)]\s+/.test(l);
+      const items = [];
+      // 번호 목록과 점 목록이 바뀌면 다른 목록으로 끊는다
+      while (i < lines.length && MD_LIST.test(lines[i]) && /^\s*\d+[.)]\s+/.test(lines[i]) === ordered) {
+        items.push(lines[i++].replace(MD_LIST, ''));
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !MD_LIST.test(lines[i])) items[items.length - 1] += ' ' + lines[i++].trim();
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      out.push(`<${tag}>${items.map((t) => `<li>${mdInline(t)}</li>`).join('')}</${tag}>`);
+      continue;
+    }
+    if (!l.trim()) {
+      i++;
+      continue;
+    }
+    const buf = [];
+    while (i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|>|-{3,}\s*$)/.test(lines[i]) && !MD_LIST.test(lines[i]) && !isRow(lines[i])) buf.push(lines[i++]);
+    if (!buf.length) buf.push(lines[i++]); // 어떤 블록에도 안 맞는 줄은 그냥 글로
+    out.push(`<p>${buf.map(mdInline).join('<br>')}</p>`);
+  }
+  return out.join('');
+}
 function reportLine(r) {
   const msg = clean(r.message);
   const head = r.kind === 'interrupted' ? '중단됐어요. ' : '다 했어요! ';
@@ -1158,12 +1247,14 @@ function openReport(r) {
     .join(' · ');
   $('rPrompt').textContent = r.prompt || '받은 일 기록이 없어요.';
   $('rMsgTitle').textContent = r.kind === 'attention' ? '지금 상태' : '보고';
-  $('rMessage').textContent =
+  $('rMessage').innerHTML = md(
     r.kind === 'attention'
-      ? `답이나 허락을 기다리고 있어요. ${r.app || '앱'}에서 확인해 주세요.${r.message ? `\n\n마지막으로 한 말: ${r.message}` : ''}`
-      : r.message || '보고 내용이 없어요.';
-  $('rNote').textContent =
-    r.app === 'Orca' && (r.message || '').length >= 195 ? 'Orca가 마지막 답변의 앞부분만 알려 줘서 여기까지 보여요. 전체는 Orca에서 확인해요.' : '';
+      ? `답이나 허락을 기다리고 있어요. ${r.app || '앱'}에서 확인해 주세요.${r.message ? `\n\n마지막으로 한 말:\n\n${r.message}` : ''}`
+      : r.message || '보고 내용이 없어요.',
+  );
+  // Orca가 잘라 준 답변을 이 Mac의 기록으로 못 채웠을 때만 알려 준다
+  const ml = (r.message || '').length;
+  $('rNote').textContent = r.app === 'Orca' && ml >= 190 && ml <= 200 ? 'Orca가 마지막 답변의 앞부분만 알려 줘서 여기까지 보여요. 전체는 Orca에서 확인해요.' : '';
   $('rFolder').hidden = !r.path;
   $('rOrca').textContent = r.canSession ? '세션 열기' : `${r.app || '앱'} 열기`;
   $('rOrca').title = r.canSession ? `${r.app}에서 이 세션을 바로 열어요` : '';

@@ -30,6 +30,28 @@ function toolHint(name, input) {
   return s.slice(0, 60);
 }
 
+// Orca는 마지막 답변을 200자에서 자른다. Orca가 띄운 Claude Code, Codex도 이 Mac에 세션 기록을 남기니,
+// 같은 폴더의 기록에서 앞부분이 똑같은 답변을 찾아 전체 답변으로 채운다 (인터넷 없이, 읽기만 한다)
+const normText = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+function fillOrcaMessages(orca, side) {
+  if (!side.length) return;
+  for (const a of orca) {
+    const m = a.message || '';
+    if (a.fpText || m.length < 190) continue; // 짧으면 잘린 게 아니다
+    const head = normText(m).slice(0, 150);
+    let best = null;
+    for (const s of side) {
+      if (s.worktree.path !== a.worktree.path || !s.message || s.message.length <= m.length) continue;
+      if (!normText(s.message).startsWith(head)) continue;
+      if (!best || s.updatedAt > best.updatedAt) best = s;
+    }
+    if (best) {
+      a.fpText = m;
+      a.message = best.message;
+    }
+  }
+}
+
 function normalize(json) {
   const out = [];
   for (const w of json?.result?.worktrees || []) {
@@ -89,10 +111,11 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
   const unread = () => state.reports.filter((r) => !r.read).length;
   // 보고 지문: 같은 에이전트가 같은 말로 끝낸 일은 같은 보고로 본다 (상태 시각만 다시 찍혀도 새 보고를 만들지 않게)
   // 권한 필요는 기다리기 시작한 때마다 하나. 내용은 저장하지 않고 이 짧은 지문만 읽음 표시로 남긴다
+  // (Orca 답변을 전체로 채웠으면 지문은 Orca가 준 원래 글로 계산한다: 이미 읽은 보고가 다시 안 읽음이 되지 않게)
   const fpOf = (a, kind) =>
     crypto
       .createHash('sha1')
-      .update(kind === 'attention' ? `${a.id}|attention|${a.stateStartedAt || 0}` : `${a.id}|${kind}|${String(a.message || '').trim()}`)
+      .update(kind === 'attention' ? `${a.id}|attention|${a.stateStartedAt || 0}` : `${a.id}|${kind}|${String(a.fpText ?? a.message ?? '').trim()}`)
       .digest('hex')
       .slice(0, 16);
   const marks = () => {
@@ -255,6 +278,7 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
           codex: src.codex !== false,
         });
       } catch {}
+      fillOrcaMessages(orca, local.orcaSide || []);
       state.sources = {
         orca: !!list,
         claude: src.claude !== false && fs.existsSync(CLAUDE_DIR),
@@ -264,6 +288,12 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
       state.ok = state.sources.orca || state.sources.claude || state.sources.codex;
       const all = orca.concat(local, demoAgents());
       diff(all);
+      // 이미 만든 Orca 보고도 전체 답변으로 바꿔 둔다 (보고가 먼저 생기고 기록이 나중에 채워지는 경우)
+      for (const r of state.reports) {
+        if (r.app !== 'Orca' || !r.message) continue;
+        const a = orca.find((x) => x.id === r.agentId && x.fpText && x.message.length > r.message.length);
+        if (a && normText(a.message).startsWith(normText(r.message).slice(0, 150))) r.message = a.message;
+      }
       state.agents = all;
     });
   }

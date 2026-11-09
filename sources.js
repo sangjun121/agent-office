@@ -329,11 +329,15 @@ function scanLocal({ orcaPaths = new Set(), orcaOn = false, claude = true, codex
     if (a.entrypoint && a.entrypoint.startsWith('sdk')) return orcaOn && orcaPaths.has(p);
     return false;
   };
-  const list = [...(claude ? scanClaude(now) : []), ...(codex ? scanCodex(now) : [])].filter((a) => !fromOrca(a));
+  const all = [...(claude ? scanClaude(now) : []), ...(codex ? scanCodex(now) : [])];
+  const list = all.filter((a) => !fromOrca(a));
   // 오래 쌓인 끝난 세션은 최근 것만
   const busy = list.filter((a) => a.state === 'working');
   const rest = list.filter((a) => a.state !== 'working').sort((x, y) => y.updatedAt - x.updatedAt).slice(0, 12);
-  return [...busy, ...rest];
+  const out = [...busy, ...rest];
+  // Orca가 띄운 세션은 작업실에 따로 세우지 않고, Orca가 잘라서 주는 답변을 채우는 데만 쓴다
+  out.orcaSide = all.filter(fromOrca);
+  return out;
 }
 
 // 설정 화면용: 이 Mac에 Claude, Codex 기록이 있는지, 최근 7일에 어떤 앱에서 썼는지

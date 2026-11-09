@@ -29,6 +29,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
+const RELEASES_URL = 'https://github.com/sangjun121/agent-office/releases/latest';
 const webPreferences = { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, autoplayPolicy: 'no-user-gesture-required' };
 function openLinksOutside(w) {
   w.webContents.setWindowOpenHandler(({ url }) => {
@@ -82,6 +83,8 @@ function showMenu() {
       { type: 'separator' },
       { label: '로그인할 때 자동으로 열기', type: 'checkbox', checked: login, click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
       { type: 'separator' },
+      // 새 버전 확인: 앱이 인터넷에 접속하지 않고, 기본 브라우저로 릴리스 페이지만 연다
+      { label: `새 버전 확인… (지금 ${app.getVersion()})`, click: () => shell.openExternal(RELEASES_URL) },
       { label: '에이전트 작업실 종료', click: () => app.quit() },
     ]),
   );
@@ -333,7 +336,12 @@ app.whenReady().then(async () => {
       const title =
         r.kind === 'attention' ? `❗ ${who} · 권한이 필요해요` : r.kind === 'interrupted' ? `⏸ ${who} · 중단됐어요` : `✅ ${who} · 다 했어요`;
       const subtitle = [r.nick ? r.name : '', r.app].filter(Boolean).join(' · ') || undefined;
-      const n = new Notification({ title, subtitle, body: String(r.message || r.prompt || '').replace(/\s+/g, ' ').slice(0, 160) });
+      const plain = String(r.message || r.prompt || '')
+        .replace(/```[\s\S]*?```/g, ' ')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/^\s*(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')
+        .replace(/\*\*|__|~~|`|\|/g, '');
+      const n = new Notification({ title, subtitle, body: plain.replace(/\s+/g, ' ').trim().slice(0, 160) });
       n.on('click', showPopover);
       n.show();
     },
