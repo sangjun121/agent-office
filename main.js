@@ -69,7 +69,7 @@ function showMenu() {
           ['office', '작업실'],
           ['cafe', '카페'],
           ['stadium', '축구장'],
-          ['paris', '생제르맹 데프레'],
+          ['paris', '파리'],
         ].map(([id, label]) => ({ label, type: 'radio', checked: srv?.getSettings().map === id, click: () => srv?.setSettings({ map: id }) })),
       },
       {

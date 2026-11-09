@@ -247,6 +247,6 @@ body.setup.embed .sbox { height: 100vh; max-height: none; max-width: none; borde
 /* 맵 그림: 축구장 (관중석 띠 + 잔디 + 하프라인) */
 .mart.stadium { background: linear-gradient(180deg, #D2D6DB 0 30%, #4C9A50 30% 100%); }
 .mart.stadium::after { content: ''; position: absolute; left: 50%; top: 30%; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, .85); }
-/* 맵 그림: 생제르맹 데프레 (건물 띠 + 차양 + 보도) */
+/* 맵 그림: 파리 (건물 띠 + 차양 + 보도) */
 .mart.paris { background: linear-gradient(180deg, #EADFCB 0 34%, #234A3A 34% 46%, #D9D2C5 46% 70%, #5E6167 70%); }
 .mart.paris::after { content: ''; position: absolute; right: 10%; top: 4px; width: 14px; height: 30px; background: #CDBFA6; box-shadow: 0 -10px 0 -3px #56616B; }

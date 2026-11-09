@@ -87,7 +87,7 @@ const LAYOUTS = {
     boss: 'boss',
     door: { x: 13.6, z: 10.6 },
   },
-  // 생제르맹 데프레: 카페 테라스에서 일하고, 공원 벤치와 보도에서 쉰다. 출근은 메트로로
+  // 파리 (생제르맹 데프레 거리 배치): 카페 테라스에서 일하고, 공원 벤치와 보도에서 쉰다. 출근은 메트로로
   paris: {
     build: (scene, o) => buildParis(scene, o),
     work: [
@@ -415,6 +415,7 @@ function hitTest(x, y, z, owner) {
 let curAct = null;
 let actKey = '';
 function nearestAct() {
+  if (FK.on) return null;
   if (me.act === 'gun') return { kind: 'fire', label: '종이 총 발사' };
   if (me.st) return { kind: 'stand', label: '일어나기' };
   if (room.ball && room.ball.near(me.x, me.z) < 0.75) return { kind: 'kick', label: '공 차기' }; // 축구장 공
@@ -474,10 +475,170 @@ function thump() {
 }
 if (room.ball)
   room.ball.onGoal = (side, x, z) => {
-    UI.toast('골!', '공은 곧 가운데로 돌아가요.', 2400);
+    if (FK.on) fkResult('goal');
+    UI.toast('골!', FK.on ? 'K를 누르면 한 번 더 차요.' : '공은 곧 가운데로 돌아가요.', 2400);
     for (let i = 0; i < 5; i++) setTimeout(() => fx.burst(x + (Math.random() - 0.5) * 1.4, 1.1 + Math.random() * 0.8, z + (Math.random() - 0.5) * 1.4, 40), i * 200);
     chime();
   };
+// ---------- 축구장 프리킥 (K): 골대 앞에 공을 놓고, 노란 수비벽 마네킹과 골키퍼 앞에서 찬다 ----------
+const FK = { on: false, phase: '', base: 0, aim: 0, hold: 0, charging: false, t: 0, shotAt: 0, touched: '', touchAt: 0, endAt: 0, dummies: [], dBodies: [], keeper: null, kBody: null, kx: 0, kz: 0, prevYaw: 0 };
+const KEEPER_LOOK = normalizeLook({ skin: '#E8B48A', hairColor: '#2B2422', cloth: '#7CE34B', accent: '#1F2226', hair: 'short', hat: 'none', face: 'smile', glasses: 'none', top: 'jersey', neck: 'none', bag: 'none' });
+const pingpong = (x) => 1 - Math.abs((x % 2) - 1);
+// 공 앞에 깔리는 노란 화살표 (찰 방향)
+const fkArrow = new THREE.Group();
+{
+  const m = new THREE.MeshBasicMaterial({ color: '#F2C230', transparent: true, opacity: 0.85, depthWrite: false });
+  const shaft = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 2.1), m);
+  shaft.rotation.x = -PI / 2;
+  shaft.position.set(0, 0.006, 1.2);
+  const head = new THREE.Mesh(new THREE.CircleGeometry(0.11, 3), m);
+  head.rotation.set(-PI / 2, 0, -PI / 2);
+  head.position.set(0, 0.006, 2.28);
+  fkArrow.add(shaft, head);
+  fkArrow.visible = false;
+  scene.add(fkArrow);
+}
+function makeDummy() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: '#F2C230', roughness: 0.6 });
+  // 훈련용 낮은 마네킹 (크로스바보다 낮아서 넘겨 찰 수 있다)
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.42, 16), mat);
+  body.position.y = 0.26;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), mat);
+  head.position.y = 0.56;
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.05, 16), new THREE.MeshStandardMaterial({ color: '#2A2E36' }));
+  base.position.y = 0.025;
+  body.castShadow = head.castShadow = true;
+  g.add(body, head, base);
+  return g;
+}
+function setPower(p) {
+  $('fkBar').querySelector('i').style.width = `${Math.round(p * 100)}%`;
+}
+function startFreeKick() {
+  if (!room.ball || !room.pitch) return;
+  if (FK.on) endFreeKick();
+  if (me.st) meStand();
+  if (me.act === 'dance' || me.act === 'gun') me.act = '';
+  const g = room.pitch;
+  const gx = g.x1; // 동쪽 골대
+  const spot = { x: gx - (2.7 + Math.random() * 0.9), z: g.cz + (Math.random() - 0.5) * 2.6 };
+  room.ball.place(spot.x, spot.z);
+  FK.base = Math.atan2(gx - spot.x, g.cz - spot.z);
+  FK.aim = 0;
+  // 수비벽: 공에서 골대 쪽으로 1.5m, 가로로 셋
+  const wx = spot.x + Math.sin(FK.base) * 1.5;
+  const wz = spot.z + Math.cos(FK.base) * 1.5;
+  const px = Math.cos(FK.base);
+  const pz = -Math.sin(FK.base);
+  for (let i = 0; i < 3; i++) {
+    const d = makeDummy();
+    const off = (i - 1) * 0.36;
+    d.position.set(wx + px * off, 0, wz + pz * off);
+    d.rotation.y = FK.base + PI;
+    scene.add(d);
+    FK.dummies.push(d);
+    FK.dBodies.push({ x: d.position.x, z: d.position.z, vx: 0, vz: 0, r: 0.18, h: 0.6 });
+  }
+  // 골키퍼
+  FK.keeper = new Avatar(KEEPER_LOOK, { shadow: false, blob: true });
+  scene.add(FK.keeper.root);
+  FK.kx = gx - 0.32;
+  FK.kz = g.cz;
+  FK.kBody = { x: FK.kx, z: FK.kz, vx: 0, vz: 0, r: 0.22, h: 1.25 };
+  Object.assign(FK, { on: true, phase: 'aim', hold: 0, charging: false, t: 0, touched: '' });
+  FK.prevYaw = cam.yawT;
+  cam.yawT = -PI / 2; // 공 뒤에서 골대를 보게
+  fkArrow.visible = true;
+  $('fkBar').hidden = false;
+  setPower(0);
+  placeShooter();
+  lastMe.x = me.x;
+  lastMe.z = me.z;
+}
+// 나는 공 뒤에서 찰 방향을 본다
+function placeShooter() {
+  const b = room.ball.pos();
+  const a = FK.base + FK.aim;
+  Object.assign(me, { x: b.x - Math.sin(a) * 0.6, z: b.z - Math.cos(a) * 0.6, h: a, y: 0, vy: 0 });
+  if (fpv.on) fpv.yaw = fpv.yawT = a;
+  fkArrow.position.set(b.x, 0, b.z);
+  fkArrow.rotation.y = a;
+}
+function fkShoot() {
+  if (!FK.on || FK.phase !== 'aim') return;
+  FK.charging = false;
+  const p = pingpong(FK.hold / 1.1);
+  const curl = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  // 세게 찰수록 빠르고 높이 뜬다. 감아 차면 겨냥한 반대쪽(골대 가운데 쪽)으로 휜다
+  // 파워 중간쯤(0.5~0.65)이면 벽을 넘겨 크로스바 아래로 떨어진다. 너무 약하면 벽, 너무 세면 크로스바 위
+  room.ball.shoot(FK.base + FK.aim, 5 + p * 5, 2 + p * 7, curl ? (FK.aim > 0 ? 1 : -1) * (6 + p * 6) : 0);
+  FK.guess = (Math.random() - 0.5) * 0.35; // 골키퍼가 살짝 잘못 읽기도 한다
+  thump();
+  Object.assign(FK, { phase: 'flying', shotAt: FK.t, touched: '' });
+  FK.kBody.hit = false;
+  for (const b of FK.dBodies) b.hit = false;
+  fkArrow.visible = false;
+  setPower(p);
+}
+function fkResult(kind) {
+  if (!FK.on || FK.phase !== 'flying') return;
+  FK.phase = 'result';
+  FK.endAt = FK.t + (kind === 'goal' ? 2.8 : 2.2);
+  $('fkBar').hidden = true; // 결과 쪽지와 겹치지 않게
+  if (kind === 'saved') UI.toast('골키퍼가 막았어요', 'K를 누르면 한 번 더 차요.', 2200);
+  else if (kind === 'wall') UI.toast('수비벽에 막혔어요', 'K를 누르면 한 번 더 차요.', 2200);
+  else if (kind === 'miss') UI.toast('아깝게 빗나갔어요', 'K를 누르면 한 번 더 차요.', 2200);
+}
+function endFreeKick() {
+  if (!FK.on) return;
+  for (const d of FK.dummies) scene.remove(d);
+  FK.dummies = [];
+  FK.dBodies = [];
+  if (FK.keeper) {
+    FK.keeper.dispose();
+    FK.keeper = null;
+  }
+  FK.on = false;
+  FK.phase = '';
+  fkArrow.visible = false;
+  $('fkBar').hidden = true;
+  cam.yawT = FK.prevYaw;
+}
+function updateFreeKick(dt) {
+  if (!FK.on) return;
+  FK.t += dt;
+  const g = room.pitch;
+  const b = room.ball.pos();
+  if (FK.phase === 'aim') {
+    const r = (keys.has('ArrowRight') || keys.has('KeyD') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('KeyA') ? 1 : 0);
+    FK.aim = clamp(FK.aim - r * 0.55 * dt, -0.7, 0.7); // 천천히 돌아서 구석을 노리기 쉽게
+    placeShooter();
+    if (FK.charging) {
+      FK.hold += dt;
+      setPower(pingpong(FK.hold / 1.1));
+    }
+    FK.kz = g.cz + Math.sin(FK.t * 1.7) * 0.25; // 골키퍼는 좌우로 살짝 움직이며 기다린다
+  } else if (FK.phase === 'flying') {
+    // 골키퍼: 공이 골라인에 닿을 곳을 보고 몸을 날린다 (조금 늦게 반응, 빠르기에 한계)
+    if (FK.t - FK.shotAt > 0.25 && b.vx > 0.3) {
+      const zAt = b.z + b.vz * ((FK.kx - b.x) / b.vx) + (FK.guess || 0);
+      FK.kz += clamp(clamp(zAt, g.cz - 0.7, g.cz + 0.7) - FK.kz, -1.2 * dt, 1.2 * dt);
+    }
+    if (!FK.touched && FK.kBody.hit) Object.assign(FK, { touched: 'keeper', touchAt: FK.t });
+    if (!FK.touched && FK.dBodies.some((x) => x.hit)) Object.assign(FK, { touched: 'wall', touchAt: FK.t });
+    const sp = Math.hypot(b.vx, b.vz);
+    if ((FK.touched && FK.t - FK.touchAt > 1.0) || (sp < 0.25 && b.y < 0.13) || FK.t - FK.shotAt > 4) fkResult(FK.touched === 'keeper' ? 'saved' : FK.touched === 'wall' ? 'wall' : 'miss');
+  } else if (FK.phase === 'result' && FK.t > FK.endAt) {
+    endFreeKick();
+    return;
+  }
+  const kvz = dt > 0 ? (FK.kz - FK.kBody.z) / dt : 0;
+  Object.assign(FK.kBody, { x: FK.kx, z: FK.kz, vx: 0, vz: kvz });
+  FK.keeper.root.position.set(FK.kx, 0, FK.kz);
+  FK.keeper.root.rotation.y = -PI / 2; // 경기장 쪽을 본다
+  FK.keeper.update(dt, { t, moving: Math.abs(kvz) > 0.3 ? 1 : 0, air: false, st: 0, seat: null, act: '', dn: 0, emote: '', emoteT: 9, hitT: 9 });
+}
 function projectToScreen(x, y, z) {
   _v.set(x, y, z).project(camera);
   return { x: VB.x + (_v.x * 0.5 + 0.5) * VB.w, y: VB.y + (-_v.y * 0.5 + 0.5) * VB.h };
@@ -1177,6 +1338,10 @@ setHide(!!settings.hideResting, false);
 $('hideBtn').onclick = (e) => (e.stopPropagation(), toggleRest());
 $('mHide').onclick = (e) => (e.stopPropagation(), toggleRest());
 $('mapSel').value = MAP_ID;
+if (room.pitch) {
+  $('fkBtn').hidden = false;
+  $('hint').insertAdjacentHTML('beforeend', ' · <kbd>K</kbd> 프리킥');
+}
 $('mapSel').onchange = (e) => api('/api/settings', { map: e.target.value }).then(() => location.reload());
 $('conn').onclick = () => openSetupModal(2);
 $('tutBtn').onclick = () => openSetupModal(1);
@@ -1312,6 +1477,7 @@ const typing = () => {
 addEventListener('keydown', (e) => {
   if (typing()) return;
   if (e.code === 'Escape') {
+    if (FK.on) return endFreeKick();
     if (!UI.closeTop() && fpv.on) toggleView(false);
     return;
   }
@@ -1320,6 +1486,11 @@ addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   keys.add(e.code);
   if (e.repeat) return;
+  if (FK.on && FK.phase === 'aim' && (e.code === 'KeyF' || e.code === 'Enter')) {
+    FK.charging = true;
+    FK.hold = 0;
+    return;
+  }
   switch (e.code) {
     case 'Space':
       return jump();
@@ -1339,9 +1510,14 @@ addEventListener('keydown', (e) => {
       return toggleGun();
     case 'KeyV':
       return toggleView();
+    case 'KeyK':
+      return room.pitch && startFreeKick();
   }
 });
-addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('keyup', (e) => {
+  keys.delete(e.code);
+  if (FK.charging && (e.code === 'KeyF' || e.code === 'Enter')) fkShoot();
+});
 addEventListener('blur', () => keys.clear());
 for (const b of document.querySelectorAll('[data-skill]'))
   b.addEventListener('click', () => {
@@ -1352,6 +1528,7 @@ for (const b of document.querySelectorAll('[data-skill]'))
     else if (s === 'gun') toggleGun();
     else if (s === 'jump') jump();
     else if (s === 'view') toggleView();
+    else if (s === 'freekick') startFreeKick();
   });
 $('runBtn').onclick = () => {
   runToggle = !runToggle;
@@ -1370,6 +1547,7 @@ function updateMe(dt) {
     if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
   }
   const run = keys.has('ShiftLeft') || keys.has('ShiftRight') || runToggle;
+  if (FK.on && FK.phase !== 'result') f = r = 0; // 프리킥 중에는 방향키로 겨냥만 한다
   if (fpv.on && r) fpv.yawT -= r * 2.4 * dt; // 1인칭: ←→는 제자리에서 돌기 (앉아 있어도 둘러볼 수 있게)
   if (fpv.on ? f : f || r) {
     let mx = fpv.on ? Math.sin(fpv.yaw) * f : -Math.sin(cam.yaw) * f + Math.cos(cam.yaw) * r;
@@ -1641,6 +1819,7 @@ const lively = () =>
   (fpv.t > 0 && fpv.t < 1) ||
   (fpv.on && Math.abs(fpv.yaw - fpv.yawT) > 0.001) ||
   !!room.ball?.moving() ||
+  FK.on ||
   [...agents.values()].some((a) => a.mode === 'walk' || a.role === 'report');
 const lastMe = { x: me.x, z: me.z };
 function frame(now = performance.now()) {
@@ -1672,8 +1851,10 @@ function frame(now = performance.now()) {
   }
   // 축구장 공: 나와 에이전트가 움직인 만큼 밀고, 굴리고, 골을 본다
   if (room.ball) {
+    updateFreeKick(dt);
     const bodies = [{ x: me.x, z: me.z, vx: (me.x - lastMe.x) / dt, vz: (me.z - lastMe.z) / dt }];
-    for (const a of agents.values()) bodies.push({ x: a.x, z: a.z, vx: (a.x - (a.lx ?? a.x)) / dt, vz: (a.z - (a.lz ?? a.z)) / dt });
+    if (FK.on) bodies.push(...FK.dBodies, FK.kBody);
+    else for (const a of agents.values()) bodies.push({ x: a.x, z: a.z, vx: (a.x - (a.lx ?? a.x)) / dt, vz: (a.z - (a.lz ?? a.z)) / dt });
     room.ball.update(dt, bodies);
     lastMe.x = me.x;
     lastMe.z = me.z;

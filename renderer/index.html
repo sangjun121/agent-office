@@ -73,7 +73,7 @@
 </div>
 <div class="hud" id="topRight">
   <button type="button" class="chip off" id="conn" title="연동 설정 열기"><svg class="i" aria-hidden="true"><use href="#i-plug"/></svg><span class="ct">살펴보는 중…</span><svg class="i sub" aria-hidden="true"><use href="#i-sliders"/></svg></button>
-  <label class="chip" id="mapChip" title="맵 바꾸기"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option><option value="stadium">축구장</option><option value="paris">생제르맹 데프레</option></select></label>
+  <label class="chip" id="mapChip" title="맵 바꾸기"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option><option value="stadium">축구장</option><option value="paris">파리</option></select></label>
   <button type="button" class="chip" id="hideBtn" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg><span class="w">쉬는 에이전트 보기</span></button>
   <button type="button" class="chip" id="musicBtn" aria-pressed="false" aria-expanded="false" title="작업실 라디오"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span class="w">음악</span></button>
   <button type="button" class="chip" id="tutBtn" title="튜토리얼 다시 보기" aria-label="튜토리얼 다시 보기"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg></button>
@@ -89,9 +89,12 @@
   <button class="skill" type="button" data-skill="gun" title="종이 총"><kbd>G</kbd><span>종이 총</span></button>
   <button class="skill" type="button" data-skill="jump" title="점프"><kbd>Space</kbd><span>점프</span></button>
   <button class="skill" type="button" id="runBtn" aria-pressed="false" title="달리기"><kbd>Shift</kbd><span>달리기</span></button>
+  <button class="skill" type="button" data-skill="freekick" id="fkBtn" title="프리킥 (축구장)" hidden><kbd>K</kbd><span>프리킥</span></button>
   <button class="skill" type="button" data-skill="view" id="fpvBtn" aria-pressed="false" title="1인칭으로 보기"><kbd>V</kbd><span>1인칭</span></button>
 </div>
 <div id="toasts" aria-live="polite"></div>
+<!-- 프리킥: 파워 막대와 조작 안내 -->
+<div id="fkBar" hidden><b>프리킥</b><span class="fkpow"><i></i></span><small>←→ 방향 · F를 누르고 있다 떼면 슛 · Shift를 누른 채 떼면 감아 차기 · Esc 그만두기</small></div>
 
 <!-- 보고함 -->
 <aside id="inbox" aria-label="보고함">

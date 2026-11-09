@@ -356,7 +356,7 @@ export function buildStadium(scene, { boardTexture } = {}) {
   const ballShadow = new THREE.Mesh(new THREE.CircleGeometry(BALL_R * 1.15, 20), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.3, depthWrite: false }));
   ballShadow.rotation.x = -PI / 2;
   root.add(ballObj, ballShadow);
-  const B = { x: 8, z: CZ, y: BALL_R, vx: 0, vz: 0, vy: 0, goalAt: 0 };
+  const B = { x: 8, z: CZ, y: BALL_R, vx: 0, vz: 0, vy: 0, spin: 0, goalAt: 0 };
   // 공이 부딪히는 것: 관중석, 광고판, 책상들 + 골대 기둥과 그물 (골 입구는 비워 둔다)
   const ballCols = colliders.filter((c) => !c.goal);
   for (const side of [-1, 1]) {
@@ -407,7 +407,16 @@ export function buildStadium(scene, { boardTexture } = {}) {
     near: (x, z) => Math.hypot(B.x - x, B.z - z),
     moving: () => Math.hypot(B.vx, B.vz) > 0.02 || B.y > BALL_R + 0.002,
     place(x, z) {
-      Object.assign(B, { x, z, y: BALL_R, vx: 0, vz: 0, vy: 0, goalAt: 0 });
+      Object.assign(B, { x, z, y: BALL_R, vx: 0, vz: 0, vy: 0, spin: 0, goalAt: 0 });
+    },
+    pos: () => ({ x: B.x, y: B.y, z: B.z, vx: B.vx, vz: B.vz }),
+    // 프리킥: 방향(angle), 빠르기, 띄우는 힘, 휘는 정도(spin: +면 차는 사람 기준 오른쪽으로 휜다)
+    shoot(angle, speed, lift, spin = 0) {
+      B.vx = Math.sin(angle) * speed;
+      B.vz = Math.cos(angle) * speed;
+      B.vy = lift;
+      B.spin = spin;
+      B.y = Math.max(B.y, BALL_R + 0.002);
     },
     // 바라보는 쪽이 공 쪽이면 그쪽으로, 아니면 나에게서 공 쪽으로 찬다. strong이면 더 세게, 더 높이
     kick(x, z, h, strong) {
@@ -438,8 +447,9 @@ export function buildStadium(scene, { boardTexture } = {}) {
         const dx = B.x - b.x;
         const dz = B.z - b.z;
         const d = Math.hypot(dx, dz);
-        const minD = BALL_R + 0.26;
-        if (d >= minD || d < 1e-4 || B.y > 0.6) continue;
+        const minD = BALL_R + (b.r ?? 0.26);
+        if (d >= minD || d < 1e-4 || B.y > (b.h ?? 0.6)) continue;
+        b.hit = true; // 누가 공을 건드렸는지 (프리킥 결과에 쓴다)
         const nx = dx / d;
         const nz = dz / d;
         B.x = b.x + nx * minD;
@@ -452,7 +462,7 @@ export function buildStadium(scene, { boardTexture } = {}) {
       }
       // 공중이면 중력과 튀기, 땅에서는 굴러가며 서서히 멈춘다
       if (B.y > BALL_R || B.vy > 0) {
-        B.vy -= 9.8 * dt;
+        B.vy -= 26 * dt; // 작은 모형 축구장이라 공이 더 빨리 떨어지게 (벽을 넘겨 떨어뜨리는 프리킥이 되도록)
         B.y += B.vy * dt;
         if (B.y <= BALL_R) {
           B.y = BALL_R;
@@ -461,23 +471,38 @@ export function buildStadium(scene, { boardTexture } = {}) {
           B.vz *= 0.88;
         }
       }
+      // 감아 찬 공은 날아가는 동안 옆으로 휜다
+      if (B.spin) {
+        const s0 = Math.hypot(B.vx, B.vz);
+        if (s0 > 0.5) {
+          const ax = (-B.vz / s0) * B.spin;
+          const az = (B.vx / s0) * B.spin;
+          B.vx += ax * dt;
+          B.vz += az * dt;
+        }
+        B.spin *= Math.exp(-0.5 * dt);
+        if (Math.abs(B.spin) < 0.05 || s0 < 0.5) B.spin = 0;
+      }
       const fr = Math.exp(-(B.y > BALL_R + 0.01 ? 0.15 : 0.85) * dt);
       B.vx *= fr;
       B.vz *= fr;
       if (Math.hypot(B.vx, B.vz) < 0.03 && B.y <= BALL_R) B.vx = B.vz = 0;
       // 빠르면 잘게 나눠 움직여서 벽을 뚫지 않게
       const sp = Math.hypot(B.vx, B.vz);
+      const prevX = B.x;
       const steps = Math.max(1, Math.ceil((sp * dt) / 0.04));
       for (let i = 0; i < steps; i++) {
         B.x += (B.vx * dt) / steps;
         B.z += (B.vz * dt) / steps;
         collideBall();
       }
-      // 골: 골라인을 다 넘고, 크로스바보다 낮게
+      // 골: 골대 앞에서 골라인을 넘는 순간, 두 기둥 사이이고 크로스바보다 낮아야 한다
+      // (크로스바 위로 넘어가 골대 뒤에 떨어진 공은 골이 아니다)
       if (!B.goalAt)
         for (const side of [-1, 1]) {
           const gx = side < 0 ? P.x0 : P.x1;
-          if ((side < 0 ? B.x < gx - BALL_R : B.x > gx + BALL_R) && Math.abs(B.z - CZ) < 0.8 && B.y < 0.72) {
+          const crossed = side < 0 ? prevX >= gx && B.x < gx : prevX <= gx && B.x > gx;
+          if (crossed && Math.abs(B.z - CZ) < 0.8 - BALL_R * 0.5 && B.y < 0.72) {
             B.goalAt = performance.now();
             ballApi.onGoal?.(side, B.x, B.z);
           }
@@ -535,6 +560,7 @@ export function buildStadium(scene, { boardTexture } = {}) {
     boardSurface,
     spawn: { x: 13.6, z: 10.6, h: PI },
     ball: ballApi,
+    pitch: { x0: P.x0, z0: P.z0, x1: P.x1, z1: P.z1, cz: CZ },
     update,
     setCut,
     toggleFridge: () => false,

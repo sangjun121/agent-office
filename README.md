@@ -37,7 +37,7 @@
 
 ## 1. 설치하기
 
-1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.3.2-arm64.dmg`를 받아요.
+1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.3.3-arm64.dmg`를 받아요.
 2. DMG를 열고 **Agent Office**를 **Applications** 폴더로 끌어다 놓아요.
 3. 처음 열면 "Apple에서 확인할 수 없는 개발자" 경고가 떠요. 아직 Apple 공증을 받지 않은 앱이라서 그래요.
    - **시스템 설정 → 개인정보 보호 및 보안**으로 가서 아래쪽의 **그래도 열기**를 누르면 돼요.
@@ -50,7 +50,7 @@
 받은 파일이 릴리스에 올린 파일과 같은지 확인하고 싶다면, 아래 값을 릴리스의 `SHA256SUMS.txt`와 비교해 보세요.
 
 ```sh
-shasum -a 256 agent-office-0.3.2-arm64.dmg
+shasum -a 256 agent-office-0.3.3-arm64.dmg
 ```
 
 > Intel Mac용 파일은 아직 없어요. 필요하면 [직접 빌드하기](#직접-빌드하기)를 참고하세요.
@@ -154,6 +154,7 @@ shasum -a 256 agent-office-0.3.2-arm64.dmg
 | Space | 점프 (공중에서 한 번 더) |
 | F, Enter | 앉기, 일어나기, 가까운 캐릭터 보기, 공 차기 (축구장, Shift를 누른 채 차면 더 세게) |
 | V | 1인칭으로 보기 |
+| K | 프리킥 (축구장): ←→로 방향, F를 누르고 있다 떼면 슛, Shift를 누른 채 떼면 감아 차기 |
 | 1 / 2 / 3 | 인사 / 하트 / 춤 |
 | C | 폭죽 |
 | G | 종이 총 꺼내기 (클릭이나 F로 쏘기) |
@@ -166,12 +167,12 @@ shasum -a 256 agent-office-0.3.2-arm64.dmg
 
 <table>
   <tr>
-    <td width="50%" valign="top"><img src="docs/stadium.jpg" alt="축구장 맵"><br><b>축구장</b><br>하얀 관중석이 둘러싼 그라운드예요. 에이전트는 기자석과 벤치에서 일하고, 쉬는 동안에는 그라운드에 나와 있어요. 나는 감독석에 앉고, 오늘의 작업 현황은 전광판에 떠요. 가운데 공은 F로 차거나 걸어가서 밀 수 있고, 골대에 넣으면 폭죽이 터져요.</td>
-    <td width="50%" valign="top"><img src="docs/paris.jpg" alt="파리 생제르맹 데프레 맵"><br><b>생제르맹 데프레</b><br>파리 생제르맹 데프레의 실제 거리 배치를 작게 옮겼어요. 생제르맹 대로, 종탑이 있는 성당과 그 앞 광장, 보나파르트 거리, 렌 거리가 시작되는 퀘벡 광장, 메트로 4호선 입구가 있어요. 에이전트는 카페 테라스에서 일하고 지하철로 출근해요.</td>
+    <td width="50%" valign="top"><img src="docs/stadium.jpg" alt="축구장 맵"><br><b>축구장</b><br>하얀 관중석이 둘러싼 그라운드예요. 에이전트는 기자석과 벤치에서 일하고, 쉬는 동안에는 그라운드에 나와 있어요. 나는 감독석에 앉고, 오늘의 작업 현황은 전광판에 떠요. 가운데 공은 F로 차거나 걸어가서 밀 수 있고, 골대에 넣으면 폭죽이 터져요. K를 누르면 수비벽과 골키퍼를 세워 두고 프리킥을 찰 수 있어요.</td>
+    <td width="50%" valign="top"><img src="docs/paris.jpg" alt="파리 맵"><br><b>파리</b><br>파리 생제르맹 데프레의 실제 거리 배치를 작게 옮겼어요. 생제르맹 대로, 종탑이 있는 성당과 그 앞 광장, 보나파르트 거리, 렌 거리가 시작되는 퀘벡 광장, 메트로 4호선 입구가 있어요. 에이전트는 카페 테라스에서 일하고 지하철로 출근해요.</td>
   </tr>
   <tr>
     <td valign="top"><img src="docs/cafe.jpg" alt="카페 맵"><br><b>카페</b><br>창가 바, 큰 테이블, 소파 라운지가 있는 카페예요.</td>
-    <td valign="top"><img src="docs/paris-eye.jpg" alt="생제르맹 데프레를 1인칭으로 본 모습"><br><b>1인칭으로 보면</b><br>어느 맵에서든 V를 누르면 그 자리에 서 있는 것처럼 둘러볼 수 있어요.</td>
+    <td valign="top"><img src="docs/paris-eye.jpg" alt="파리 맵을 1인칭으로 본 모습"><br><b>1인칭으로 보면</b><br>어느 맵에서든 V를 누르면 그 자리에 서 있는 것처럼 둘러볼 수 있어요.</td>
   </tr>
 </table>
 
@@ -299,7 +300,7 @@ sources.js   Claude Code, Codex 세션 기록 읽기
 staff.js     충성도와 직급
 appicons.js  이 Mac에 깔린 Orca, Claude, Codex 아이콘 읽기
 renderer/    앱 화면 (3D 작업실, 처음 설정, 라디오 음악)
-shared/      맵(작업실, 카페, 축구장, 생제르맹 데프레)과 캐릭터 (three.js)
+shared/      맵(작업실, 카페, 축구장, 파리)과 캐릭터 (three.js)
 scripts/     아이콘, README 그림, 홍보 영상, 빌드 도우미
 ```
 
@@ -312,4 +313,4 @@ scripts/     아이콘, README 그림, 홍보 영상, 빌드 도우미
 - [three.js](https://threejs.org) (MIT), [Electron](https://www.electronjs.org) (MIT)
 - 글꼴 [주아](https://fonts.google.com/specimen/Jua) (OFL), [Pretendard](https://github.com/orioncactus/pretendard) (OFL). 라이선스 전문은 `renderer/fonts`에 있어요.
 
-Orca, Claude, Claude Code, Codex, ChatGPT는 각 회사의 상표예요. 이 프로젝트는 그 회사들과 관계없는 개인 프로젝트예요. 축구장 맵은 특정 구단과 관계없는 창작물이고, 생제르맹 데프레 맵의 가게 이름은 지어낸 이름이에요.
+Orca, Claude, Claude Code, Codex, ChatGPT는 각 회사의 상표예요. 이 프로젝트는 그 회사들과 관계없는 개인 프로젝트예요. 축구장 맵은 특정 구단과 관계없는 창작물이고, 파리 맵의 가게 이름은 지어낸 이름이에요.

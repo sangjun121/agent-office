@@ -266,7 +266,7 @@ app.whenReady().then(async () => {
   app.quit();
 });
 
-// 축구장, 생제르맹 데프레를 따로 띄운 서버 (같은 가짜 에이전트)
+// 축구장, 파리를 따로 띄운 서버 (같은 가짜 에이전트)
 async function mapServers() {
   const out = {};
   for (const m of ['stadium', 'paris']) {
@@ -342,12 +342,12 @@ async function promo() {
   await sleep(1400);
   await key('KeyV');
   await sleep(900);
-  // 맵: 축구장 → 생제르맹 데프레 (1인칭까지)
+  // 맵: 축구장 → 파리 (1인칭까지)
   for (const m of ['stadium', 'paris']) await inMap(maps[m], "document.getElementById('inboxHide')?.click()").catch(() => {});
   await js("S.cap('맵도 골라요. 축구장,')");
   await js("document.getElementById('map-stadium').classList.add('on')");
   await sleep(2100);
-  await js("S.cap('파리 생제르맹 데프레까지')");
+  await js("S.cap('파리까지')");
   await js("document.getElementById('map-paris').classList.add('on')");
   await sleep(1700);
   await inMap(maps.paris, "dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV', bubbles: true }))").catch(() => {});
@@ -477,7 +477,7 @@ async function stills(srv) {
     await still('music.jpg', { x: WIN.x + r.x - 260, y: WIN.y + r.y - 70, w: r.w + 300, h: r.h + 110 });
   }
   await inApp("document.getElementById('musicClose').click()");
-  // 11) 카페, 축구장, 생제르맹 데프레 맵
+  // 11) 카페, 축구장, 파리 맵
   await inApp("(() => { const s = document.getElementById('mapSel'); s.value = 'cafe'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
   await sleep(1500);
   await until(() => inApp("!!(window.__ao && __ao.agents.size >= 7 && document.getElementById('loading').classList.contains('done'))"), 20000);
@@ -492,7 +492,7 @@ async function stills(srv) {
     await sleep(600);
     await still(`${m}.jpg`, CROP);
     if (m !== 'paris') continue;
-    // 생제르맹 데프레는 1인칭으로 한 장 더
+    // 파리는 1인칭으로 한 장 더
     await key('KeyV');
     await sleep(1600);
     await still(`${m}-eye.jpg`, CROP);

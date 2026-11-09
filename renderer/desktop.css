@@ -422,3 +422,12 @@ body.mini #card .nameIn { font-size: 16px; }
 #radioPlay { min-width: 64px; }
 #musicBtn[aria-pressed="true"] { background: var(--accent-weak) !important; box-shadow: inset 0 0 0 2px var(--accent) !important; }
 #musicBtn .i { color: #3F4A47; }
+
+/* ---------- 프리킥 ---------- */
+#fkBar { position: fixed; z-index: 7; left: 50%; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; padding: 10px 16px 9px; border-radius: 14px; background: rgba(20, 28, 26, .82); color: #fff; box-shadow: var(--shadow); pointer-events: none; }
+#fkBar b { font: 17px var(--hand); }
+.fkpow { display: block; width: 260px; height: 10px; border-radius: 99px; background: rgba(255, 255, 255, .18); overflow: hidden; }
+.fkpow i { display: block; width: 0; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #7CE34B, #F2C230 60%, #E5484D); }
+#fkBar small { color: rgba(255, 255, 255, .78); font-size: 12px; white-space: nowrap; }
+body.mini #fkBar { bottom: auto; top: 240px; padding: 8px 12px; }
+body.mini #fkBar small { display: none; }
