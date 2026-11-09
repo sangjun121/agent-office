@@ -41,6 +41,10 @@
   <symbol id="i-plug" viewBox="0 0 20 20"><path d="M7.4 2.6v3.6M12.6 2.6v3.6"/><path d="M4.8 6.2h10.4v2.6a5.2 5.2 0 0 1-10.4 0z" fill="currentColor" fill-opacity=".16"/><path d="M10 14v3.4"/></symbol>
   <symbol id="i-staff" viewBox="0 0 20 20"><circle cx="7.4" cy="7" r="2.8" fill="currentColor" fill-opacity=".16"/><circle cx="13.6" cy="8" r="2.3" fill="currentColor" fill-opacity=".16"/><path d="M2.6 16.4a4.8 4.8 0 0 1 9.6 0M12 12.4a4 4 0 0 1 5.4 3.6"/></symbol>
   <symbol id="i-music" viewBox="0 0 20 20"><path d="M7.4 14.2V4.6l9-1.8v9.6" /><circle cx="5.4" cy="14.4" r="2" fill="currentColor" fill-opacity=".16"/><circle cx="14.4" cy="12.6" r="2" fill="currentColor" fill-opacity=".16"/><path d="M7.4 7.6l9-1.8"/></symbol>
+  <symbol id="i-piano" viewBox="0 0 20 20"><rect x="2.6" y="4" width="14.8" height="12" rx="2" fill="currentColor" fill-opacity=".16"/><path d="M7.5 4v12M12.5 4v12"/><path d="M6.2 4v6.4M8.8 4v6.4M11.2 4v6.4M13.8 4v6.4" stroke-width="2.2"/></symbol>
+  <symbol id="i-rain" viewBox="0 0 20 20"><path d="M6.2 12.2a3.5 3.5 0 0 1-.1-7 4.6 4.6 0 0 1 8.8 1.3 2.9 2.9 0 0 1-.3 5.7z" fill="currentColor" fill-opacity=".16"/><path d="M7.4 14.6l-.8 1.9M10.6 14.6l-.8 1.9M13.8 14.6l-.8 1.9"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 20 20"><path d="M2.4 10c1.3-3.2 2.5-3.2 3.8 0s2.5 3.2 3.8 0 2.5-3.2 3.8 0 2.5 3.2 3.8 0"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 20 20"><path d="M3.4 7.6h3l4-3.4v11.6l-4-3.4h-3z" fill="currentColor" fill-opacity=".16"/><path d="M13.6 7.4a3.6 3.6 0 0 1 0 5.2M15.8 5.4a6.4 6.4 0 0 1 0 9.2"/></symbol>
   <symbol id="i-folder" viewBox="0 0 20 20"><path d="M2.6 5.6a1.6 1.6 0 0 1 1.6-1.6h3.6l1.8 2h6.2a1.6 1.6 0 0 1 1.6 1.6v6.8a1.6 1.6 0 0 1-1.6 1.6H4.2a1.6 1.6 0 0 1-1.6-1.6z" fill="currentColor" fill-opacity=".16"/></symbol>
 </svg>
 
@@ -71,7 +75,7 @@
   <button type="button" class="chip off" id="conn" title="연동 설정 열기"><svg class="i" aria-hidden="true"><use href="#i-plug"/></svg><span class="ct">살펴보는 중…</span><svg class="i sub" aria-hidden="true"><use href="#i-sliders"/></svg></button>
   <label class="chip" id="mapChip" title="맵 바꾸기"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><select id="mapSel" aria-label="맵"><option value="office">작업실</option><option value="cafe">카페</option><option value="stadium">축구장</option><option value="paris">생제르맹 데프레</option></select></label>
   <button type="button" class="chip" id="hideBtn" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-rest"/></svg><span class="w">쉬는 에이전트 보기</span></button>
-  <button type="button" class="chip" id="musicBtn" aria-pressed="false" aria-expanded="false" title="YouTube 음악 틀기"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span class="w">음악</span></button>
+  <button type="button" class="chip" id="musicBtn" aria-pressed="false" aria-expanded="false" title="작업실 라디오"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span class="w">음악</span></button>
   <button type="button" class="chip" id="tutBtn" title="튜토리얼 다시 보기" aria-label="튜토리얼 다시 보기"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg></button>
 </div>
 <div id="hint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · <kbd>V</kbd> 1인칭 · 캐릭터를 누르면 지금 하는 일</div>
@@ -129,13 +133,16 @@
   <label class="popt"><input type="checkbox" id="restHideAll"><span>일 끝난 에이전트는 항상 바로 퇴근</span></label>
 </div>
 
-<!-- 음악: '음악' 버튼 아래로 펼치는 작은 창. 영상 칸 위에 YouTube가 겹쳐 뜬다 -->
-<div id="musicPanel" class="ppanel" hidden role="dialog" aria-label="음악">
-  <div class="phead"><b>음악</b><small id="musicState"></small><button type="button" class="x" id="musicClose" aria-label="접기">×</button></div>
-  <form class="murow" id="musicForm"><input id="musicUrl" placeholder="YouTube 영상이나 재생목록 주소" autocomplete="off" spellcheck="false"><button type="submit" class="btn sm" id="musicPlay">틀기</button></form>
-  <p class="muerr" id="musicErr" hidden>YouTube 영상이나 재생목록 주소를 넣어 주세요.</p>
-  <div class="mustage" id="musicStage"><p>주소를 넣고 <b>틀기</b>를 누르면 여기서 재생돼요.<br>영상, 재생목록, 믹스 모두 돼요.</p></div>
-  <div class="pfoot"><small class="munote">이 칸만 YouTube에 접속해요. 접어 둬도 계속 재생돼요.</small><span class="sp"></span><button type="button" class="btn ghost sm" id="musicStop">끄기</button></div>
+<!-- 작업실 라디오: '음악' 버튼 아래로 펼치는 작은 창. 인터넷 없이 앱 안에서 만드는 음악 -->
+<div id="musicPanel" class="ppanel" hidden role="dialog" aria-label="작업실 라디오">
+  <div class="phead"><b>작업실 라디오</b><small id="musicState"></small><button type="button" class="x" id="musicClose" aria-label="접기">×</button></div>
+  <div class="rlist" role="group" aria-label="채널">
+    <button type="button" class="rst" data-st="lofi" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg><span><b>로파이</b><small>느린 비트와 건반</small></span></button>
+    <button type="button" class="rst" data-st="piano" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-piano"/></svg><span><b>피아노</b><small>잔잔한 피아노</small></span></button>
+    <button type="button" class="rst" data-st="rain" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-rain"/></svg><span><b>빗소리</b><small>창밖에 내리는 비</small></span></button>
+    <button type="button" class="rst" data-st="focus" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-wave"/></svg><span><b>집중 소음</b><small>낮고 부드러운 소음</small></span></button>
+  </div>
+  <div class="pfoot"><button type="button" class="btn sm" id="radioPlay">재생</button><label class="rvol" title="볼륨"><svg class="i" aria-hidden="true"><use href="#i-volume"/></svg><input type="range" id="radioVol" min="0" max="100" step="1" aria-label="볼륨"></label></div>
 </div>
 
 <!-- 튜토리얼 / 연동 설정: 새 창 대신 앱 안 팝업으로 -->

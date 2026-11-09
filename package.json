@@ -1,7 +1,7 @@
 {
   "name": "agent-office",
   "productName": "Agent Office",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Orca, Claude Code, Codex에서 돌린 AI 에이전트가 3D 작업실에서 일하다가 끝나면 보고하러 오는 macOS 상단바 앱",
   "author": "조상준",

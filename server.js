@@ -29,30 +29,7 @@ const DEFAULTS = {
 };
 const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris']);
 
-// YouTube 주소에서 재생목록(list)과 영상(v) 아이디만 꺼낸다. 다른 주소는 받지 않는다.
-const YT_V = /^[A-Za-z0-9_-]{11}$/;
-const YT_LIST = /^[A-Za-z0-9_-]{10,80}$/;
-function parseYouTube(input) {
-  const s = String(input || '').trim().slice(0, 500);
-  if (YT_LIST.test(s) && /^(PL|OL|RD|UU|FL|LL|LM)/.test(s)) return { list: s };
-  let u;
-  try {
-    u = new URL(s);
-  } catch {
-    return null;
-  }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-  const host = u.hostname.toLowerCase().replace(/^(www|m|music)\./, '');
-  let v = '';
-  if (host === 'youtu.be') v = u.pathname.split('/')[1] || '';
-  else if (host === 'youtube.com') v = u.searchParams.get('v') || (/^\/(shorts|live)\//.test(u.pathname) ? u.pathname.split('/')[2] || '' : '');
-  else return null;
-  const out = {};
-  const list = u.searchParams.get('list') || '';
-  if (YT_LIST.test(list)) out.list = list;
-  if (YT_V.test(v)) out.v = v;
-  return out.list || out.v ? out : null;
-}
+const RADIO_STATIONS = new Set(['lofi', 'piano', 'rain', 'focus']);
 function loadSettings(file) {
   try {
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -155,8 +132,8 @@ function startServer({
   isViewing, // 작업실 창이 열려 있는지 (닫혀 있으면 덜 자주 확인)
   getLoginItem,
   setLoginItem,
-  music, // ('play', { list, v }) | ('show', rect) | ('hide') | ('stop'): 작업실 창 안 음악 칸
-  musicState, // () => { on }
+  radio, // ({ on, station, volume }): 작업실 라디오 켜고 끄기, 채널과 볼륨
+  radioState, // () => { on, station, volume }
   fixture,
   fixtureDetect,
 } = {}) {
@@ -168,6 +145,7 @@ function startServer({
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     } catch {}
   };
+  delete settings.musicUrl; // 0.2.x의 YouTube 주소는 더 이상 쓰지 않는다
   if (!settings.staff || typeof settings.staff !== 'object') settings.staff = {};
   const staff = createStaff({ get: () => settings.staff, save: () => saveSettings() });
   const watcher = createWatcher({
@@ -192,6 +170,15 @@ function startServer({
   };
   const withKey = (x) => ({ ...x, staffKey: staffOf(x)?.key || null, canSession: canOpenSession(x.app || '', x.agentId || x.id || '') });
   // 설정 바꾸기 (화면에서도, 상단바 메뉴에서도 쓴다)
+  // 작업실 라디오: 고른 채널과 볼륨만 남긴다
+  function saveRadio(r = {}) {
+    const cur = settings.radio || {};
+    settings.radio = {
+      station: RADIO_STATIONS.has(r.station) ? r.station : RADIO_STATIONS.has(cur.station) ? cur.station : 'lofi',
+      volume: Number.isFinite(r.volume) ? Math.max(0, Math.min(1, r.volume)) : Number.isFinite(cur.volume) ? cur.volume : 0.6,
+    };
+    saveSettings();
+  }
   function applySettings(body = {}) {
     if (typeof body.bossName === 'string') settings.bossName = body.bossName.trim().slice(0, 16) || '나';
     for (const k of ['notify', 'sound', 'hideResting', 'miniInbox', 'pinPopover']) if (typeof body[k] === 'boolean') settings[k] = body[k];
@@ -244,9 +231,8 @@ function startServer({
             pinPopover: settings.pinPopover,
             sentHome: settings.sentHome,
             agentNames: settings.agentNames,
-            musicUrl: settings.musicUrl || '',
           },
-          music: musicState?.() || { on: false },
+          radio: radioState?.() || { on: false, station: settings.radio?.station || 'lofi', volume: settings.radio?.volume ?? 0.6 },
           agents: s.agents.map(withKey),
           reports: s.reports.map(withKey),
           ...staff.view(),
@@ -322,24 +308,14 @@ function startServer({
         openWindow?.({ look: body.look === true, setup: Number(body.setup) || 0 });
         return json(res, 200, { ok: !!openWindow });
       }
-      if (p === '/api/music') {
-        if (body.action === 'stop' || body.action === 'hide') {
-          music?.(body.action);
-          return json(res, 200, { ok: true });
-        }
-        if (body.action === 'show') {
-          const r = body.rect || {};
-          const n = (v, max) => Number.isFinite(v) && v >= 0 && v <= max;
-          if (!(n(r.x, 8000) && n(r.y, 8000) && n(r.w, 4000) && n(r.h, 4000))) return json(res, 400, { ok: false });
-          music?.('show', { x: r.x, y: r.y, w: r.w, h: r.h });
-          return json(res, 200, { ok: true });
-        }
-        const yt = parseYouTube(body.url);
-        if (!yt) return json(res, 400, { ok: false, error: 'bad-url' });
-        settings.musicUrl = String(body.url).trim().slice(0, 500);
-        saveSettings();
-        music?.('play', yt);
-        return json(res, 200, { ok: !!music });
+      if (p === '/api/radio') {
+        const r = {};
+        if (typeof body.on === 'boolean') r.on = body.on;
+        if (RADIO_STATIONS.has(body.station)) r.station = body.station;
+        if (Number.isFinite(body.volume)) r.volume = Math.max(0, Math.min(1, body.volume));
+        saveRadio(r);
+        radio?.(r);
+        return json(res, 200, { ok: !!radio, radio: radioState?.() });
       }
       if (p === '/api/menu') {
         showMenu?.();
@@ -370,6 +346,7 @@ function startServer({
 
     if (p === '/' || p === '/index.html') return sendFile(res, path.join(__dirname, 'renderer', 'index.html'));
     if (p === '/setup') return sendFile(res, path.join(__dirname, 'renderer', 'setup.html'));
+    if (p === '/radio') return sendFile(res, path.join(__dirname, 'renderer', 'radio.html'));
     if (p === '/favicon.svg') return sendFile(res, path.join(__dirname, 'renderer', 'favicon.svg'));
     for (const [prefix, dir] of MAPS) {
       if (!dir || !p.startsWith(prefix)) continue;
@@ -391,6 +368,7 @@ function startServer({
         watcher,
         getSettings: () => settings,
         setSettings: applySettings,
+        saveRadio,
         close: () => (watcher.stop(), clearInterval(staleTimer), server.close()),
       });
     };
@@ -399,7 +377,7 @@ function startServer({
   });
 }
 
-module.exports = { parseYouTube, startServer };
+module.exports = { startServer };
 
 // `node server.js`: 브라우저로 보기 (알림은 macOS 알림 센터로)
 if (require.main === module) {

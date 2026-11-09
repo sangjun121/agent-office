@@ -2,7 +2,7 @@
 // 상단바 아이콘을 누르면 바로 아래에 작은 작업실이 펼쳐지고, 바깥을 누르면 접힌다.
 // 크게 보고 싶으면 '크게 보기'로 큰 창을 연다. 앱은 상단바에 남아서 계속 지켜본다.
 const path = require('node:path');
-const { app, BrowserWindow, WebContentsView, Notification, shell, Tray, Menu, nativeImage, screen, session } = require('electron');
+const { app, BrowserWindow, Notification, shell, Tray, Menu, nativeImage, screen, session } = require('electron');
 const { startServer } = require('./server.js');
 const { getAppIcons } = require('./appicons.js');
 
@@ -55,12 +55,14 @@ function showMenu() {
       { label: '에이전트 연동 설정…', click: () => openSetupInApp(2) },
       { label: '튜토리얼 다시 보기', click: () => openSetupInApp(1) },
       { type: 'separator' },
-      ...(musicView
-        ? [
-            { label: '음악 보기', click: () => showWindow({ music: true }) },
-            { label: '음악 끄기', click: () => musicStop() },
-          ]
-        : [{ label: '음악 틀기…', click: () => showWindow({ music: true }) }]),
+      {
+        label: '작업실 라디오',
+        submenu: [
+          { label: '끄기', type: 'radio', checked: !radio.on, click: () => setRadio({ on: false }) },
+          { type: 'separator' },
+          ...STATIONS.map(([id, label]) => ({ label, type: 'radio', checked: radio.on && radio.station === id, click: () => setRadio({ on: true, station: id }) })),
+        ],
+      },
       {
         label: '맵',
         submenu: [
@@ -226,103 +228,41 @@ function finishSetup() {
 }
 
 // look: true → 큰 창에서 캐릭터 꾸미기까지 연다, setup: 단계 → 큰 창 안 팝업으로 튜토리얼/연동 설정 (작은 창은 좁다)
-// ---------- 음악: YouTube를 작업실 창 안 작은 팝업에 띄운다 ----------
-// 퍼가기 플레이어는 음반사가 막아 둔 영상과 믹스를 못 틀어서, YouTube 페이지를 그대로 띄운다.
-// 작업실 화면과 다른 세션(메모리에만)에서 돌고, 이 칸만 YouTube와 그 서버에 접속할 수 있다.
-let musicView = null;
-let musicHost = null;
-let musicSession = null;
-const MUSIC_HOSTS =
-  /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|ytimg\.com|googlevideo\.com|ggpht\.com|gstatic\.com|googleapis\.com|googleusercontent\.com|google\.com|doubleclick\.net|googleadservices\.com|googlesyndication\.com)$/;
-const isYouTubePage = (u) => {
-  try {
-    const x = new URL(u);
-    return x.protocol === 'https:' && /(^|\.)youtube\.com$/.test(x.hostname);
-  } catch {
-    return false;
+// ---------- 작업실 라디오: 숨은 창에서 Web Audio로 만든 음악을 튼다 (인터넷 없음, 음악 파일 없음) ----------
+const STATIONS = [
+  ['lofi', '로파이'],
+  ['piano', '피아노'],
+  ['rain', '빗소리'],
+  ['focus', '집중 소음'],
+];
+let radioWin = null;
+const radio = { on: false, station: 'lofi', volume: 0.6 };
+function radioPush() {
+  if (radioWin && !radioWin.isDestroyed()) radioWin.webContents.executeJavaScript(`window.radio && window.radio.set(${JSON.stringify(radio)})`).catch(() => {});
+}
+function radioApply() {
+  if (!radio.on) {
+    radioPush();
+    // 소리가 다 줄어든 뒤 창을 닫아 메모리를 돌려준다
+    setTimeout(() => {
+      if (!radio.on && radioWin && !radioWin.isDestroyed()) radioWin.destroy();
+    }, 2000);
+    return;
   }
-};
-function getMusicSession() {
-  if (musicSession) return musicSession;
-  musicSession = session.fromPartition('agent-office-music'); // 'persist:'가 없어서 앱을 끄면 쿠키도 사라진다
-  musicSession.setUserAgent(musicSession.getUserAgent().replace(/\s(Electron|agent-office|Agent Office)\/\S+/g, ''));
-  musicSession.webRequest.onBeforeRequest((d, cb) => {
-    let ok = d.url.startsWith('data:') || d.url.startsWith('blob:');
-    try {
-      const u = new URL(d.url);
-      if ((u.protocol === 'https:' || u.protocol === 'wss:') && MUSIC_HOSTS.test(u.hostname)) ok = true;
-    } catch {}
-    cb({ cancel: !ok });
+  if (radioWin && !radioWin.isDestroyed()) return radioPush();
+  radioWin = new BrowserWindow({ show: false, width: 200, height: 120, webPreferences: { ...webPreferences, backgroundThrottling: false } });
+  radioWin.on('closed', () => {
+    radioWin = null;
   });
-  musicSession.setPermissionRequestHandler((wc, perm, cb) => cb(perm === 'fullscreen'));
-  musicSession.setPermissionCheckHandler((wc, perm) => perm === 'fullscreen');
-  return musicSession;
+  radioWin.webContents.once('did-finish-load', radioPush);
+  radioWin.loadURL(`http://127.0.0.1:${srv.port}/radio`);
 }
-function youtubeUrl({ list, v } = {}) {
-  const u = new URL('https://www.youtube.com/watch');
-  if (v) u.searchParams.set('v', v);
-  if (list) u.searchParams.set('list', list);
-  return u.href;
-}
-function musicPlay(spec) {
-  if (!musicView || musicView.webContents.isDestroyed()) {
-    musicView = new WebContentsView({
-      webPreferences: {
-        session: getMusicSession(),
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false,
-        spellcheck: false,
-        autoplayPolicy: 'no-user-gesture-required',
-        backgroundThrottling: false, // 팝업을 접어도 계속 재생
-      },
-    });
-    musicView.setBackgroundColor('#000000');
-    const wc = musicView.webContents;
-    // YouTube 밖으로 나가는 링크는 기본 브라우저로
-    wc.on('will-navigate', (e, u) => {
-      if (isYouTubePage(u)) return;
-      e.preventDefault();
-      if (/^https?:\/\//.test(u)) shell.openExternal(u);
-    });
-    wc.setWindowOpenHandler(({ url: u }) => {
-      if (/^https?:\/\//.test(u)) shell.openExternal(u);
-      return { action: 'deny' };
-    });
-    wc.on('render-process-gone', () => musicStop());
-    // YouTube 페이지가 '나가시겠어요?'로 끄기를 막지 못하게
-    wc.on('will-prevent-unload', (e) => e.preventDefault());
-  }
-  musicView.webContents.loadURL(youtubeUrl(spec));
-}
-// 작업실 창 안 팝업의 영상 칸 위치에 겹쳐 보인다 (rect는 창 안 좌표)
-function musicShow(rect) {
-  if (!musicView || !win || win.isDestroyed()) return;
-  if (musicHost !== win) {
-    musicHide();
-    win.contentView.addChildView(musicView);
-    musicHost = win;
-  }
-  musicView.setBounds({ x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.w), height: Math.round(rect.h) });
-}
-// 팝업을 접으면 화면에서만 뺀다 (소리는 계속 난다)
-function musicHide() {
-  if (musicView && musicHost && !musicHost.isDestroyed()) musicHost.contentView.removeChildView(musicView);
-  musicHost = null;
-}
-function musicStop() {
-  musicHide();
-  const wc = musicView && !musicView.webContents.isDestroyed() ? musicView.webContents : null;
-  musicView = null;
-  if (!wc) return;
-  // 소리부터 바로 끄고, 재생을 멈춘 뒤 페이지를 닫는다
-  wc.setAudioMuted(true);
-  wc.executeJavaScript("document.querySelectorAll('video, audio').forEach((m) => m.pause())").catch(() => {});
-  wc.close({ waitForBeforeUnload: false });
-}
-function musicState() {
-  const on = !!(musicView && !musicView.webContents.isDestroyed());
-  return { on, title: on ? musicView.webContents.getTitle().replace(/\s*-\s*YouTube$/, '').slice(0, 120) : '' };
+function setRadio(s) {
+  if (STATIONS.some(([id]) => id === s.station)) radio.station = s.station;
+  if (Number.isFinite(s.volume)) radio.volume = Math.max(0, Math.min(1, s.volume));
+  if (typeof s.on === 'boolean') radio.on = s.on;
+  srv?.saveRadio?.({ station: radio.station, volume: radio.volume });
+  radioApply();
 }
 
 function showWindow(opts) {
@@ -352,7 +292,6 @@ function showWindow(opts) {
   });
   openLinksOutside(win);
   win.once('ready-to-show', () => win.show());
-  win.on('close', () => musicHide()); // 창을 닫아도 음악은 계속 (상단바 메뉴에서 끈다)
   win.on('closed', () => {
     win = null;
     updateDock();
@@ -400,16 +339,14 @@ app.whenReady().then(async () => {
     },
     badge: setUnread,
     openWindow: showWindow,
-    music: (action, data) => {
-      if (action === 'play') musicPlay(data);
-      else if (action === 'show') musicShow(data);
-      else if (action === 'hide') musicHide();
-      else musicStop();
-    },
-    musicState,
+    radio: (s) => setRadio(s),
+    radioState: () => ({ ...radio }),
     showMenu: () => showMenu(),
   });
   baseUrl = srv.url;
+  const savedRadio = srv.getSettings().radio || {};
+  if (STATIONS.some(([id]) => id === savedRadio.station)) radio.station = savedRadio.station;
+  if (Number.isFinite(savedRadio.volume)) radio.volume = Math.max(0, Math.min(1, savedRadio.volume));
   setupUrl = srv.setupUrl;
   // 외부 인터넷 차단: 앱 화면은 이 Mac 안의 작업실 서버(127.0.0.1)에만 접속할 수 있다
   const local = `http://127.0.0.1:${srv.port}/`;

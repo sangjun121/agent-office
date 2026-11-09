@@ -467,11 +467,11 @@ async function stills(srv) {
   await js("document.getElementById('pop').style.height = '640px'");
   await sleep(1200);
   await still('menubar-open.jpg', { x: SW - 760, y: 0, w: 760, h: 700 });
-  // 10) 음악 패널
+  // 10) 작업실 라디오 팝업
   await js("S.on('pop', false); S.on('tray', false); S.off('win', false)");
   await sleep(500);
-  await inApp("document.getElementById('musicBtn').click(); document.getElementById('musicUrl').value = 'https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG'");
-  await sleep(600);
+  await inApp("document.getElementById('musicBtn').click(); document.querySelector('#musicPanel .rst[data-st=lofi]').click()");
+  await sleep(500);
   {
     const r = await inApp("(() => { const b = document.getElementById('musicPanel').getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; })()");
     await still('music.jpg', { x: WIN.x + r.x - 260, y: WIN.y + r.y - 70, w: r.w + 300, h: r.h + 110 });

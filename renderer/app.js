@@ -751,7 +751,7 @@ function applySettings(s) {
 function sync(st) {
   lastState = st;
   applySettings(st.settings);
-  showMusicState(st.music);
+  showRadio(st.radio);
   const first = !synced;
   const now = Date.now();
   // 이번에 새로 들어온 보고 (이 에이전트는 숨김 설정이어도 걸어와서 보고한다)
@@ -1824,72 +1824,58 @@ document.addEventListener('pointerdown', (e) => {
   if (musicPanelOpen && !e.target.closest('#musicPanel, #musicBtn')) toggleMusicPanel(false);
 });
 
-// ---------- 음악: '음악' 버튼 아래 작은 팝업. 영상 칸 위에 YouTube 페이지가 겹쳐 뜬다 ----------
-// (YouTube 칸은 main.js가 따로 띄운다. 이 칸만 YouTube에 접속하고, 접어도 소리는 계속 난다)
+// ---------- 작업실 라디오: '음악' 버튼 아래 작은 팝업 (소리는 main.js의 숨은 창에서 만든다) ----------
 let musicPanelOpen = false;
-let musicOn = false;
+let radioNow = { on: false, station: 'lofi', volume: 0.6 };
+let radioTouched = 0;
 function placeMusicPanel() {
   const b = $('musicBtn').getBoundingClientRect();
   const P = $('musicPanel');
   P.style.top = `${Math.round(b.bottom + 8)}px`;
   P.style.right = `${Math.max(10, Math.round(innerWidth - b.right))}px`;
 }
-function placeMusicView() {
-  if (!musicPanelOpen || !musicOn) return;
-  const r = $('musicStage').getBoundingClientRect();
-  api('/api/music', { action: 'show', rect: { x: Math.max(0, r.left), y: Math.max(0, r.top), w: r.width, h: r.height } }).catch(() => {});
-}
 function toggleMusicPanel(force) {
   if (MINI) return api('/api/open-window', { music: true }); // 작은 창에서는 큰 창을 열어 보여 준다
   musicPanelOpen = force ?? !musicPanelOpen;
   $('musicPanel').hidden = !musicPanelOpen;
   $('musicBtn').setAttribute('aria-expanded', String(musicPanelOpen));
-  if (!musicPanelOpen) {
-    UI.closeLayer('music');
-    if (musicOn) api('/api/music', { action: 'hide' }).catch(() => {});
-    return;
-  }
+  if (!musicPanelOpen) return UI.closeLayer('music');
   placeMusicPanel();
-  if (!$('musicUrl').value) $('musicUrl').value = lastState.settings?.musicUrl || '';
-  $('musicErr').hidden = true;
+  showRadio(radioNow, true);
   UI.openLayer('music', () => toggleMusicPanel(false), false);
-  requestAnimationFrame(placeMusicView);
-  if (!musicOn) setTimeout(() => $('musicUrl').focus(), 60);
 }
-function showMusicState(m) {
-  const on = !!m?.on;
-  const turnedOn = on && !musicOn;
-  musicOn = on;
-  $('musicBtn').setAttribute('aria-pressed', String(on));
-  $('musicState').textContent = on ? m.title || '재생 중' : '';
-  $('musicState').title = on ? m.title || '' : '';
-  $('musicStop').disabled = !on;
-  $('musicStage').classList.toggle('on', on);
-  if (turnedOn) placeMusicView();
+const STATION_KO = { lofi: '로파이', piano: '피아노', rain: '빗소리', focus: '집중 소음' };
+function showRadio(r, force) {
+  if (!r) return;
+  // 방금 직접 바꿨으면 서버 값이 따라올 때까지 잠깐 기다린다 (슬라이더가 튀지 않게)
+  if (!force && Date.now() - radioTouched < 1500) return;
+  radioNow = { on: !!r.on, station: r.station || 'lofi', volume: Number.isFinite(r.volume) ? r.volume : 0.6 };
+  $('musicBtn').setAttribute('aria-pressed', String(radioNow.on));
+  $('musicState').textContent = radioNow.on ? `${STATION_KO[radioNow.station] || ''} 재생 중` : '';
+  for (const b of document.querySelectorAll('#musicPanel .rst')) b.setAttribute('aria-pressed', String(b.dataset.st === radioNow.station));
+  $('radioPlay').textContent = radioNow.on ? '멈춤' : '재생';
+  $('radioVol').value = String(Math.round(radioNow.volume * 100));
+}
+function radioSend(r) {
+  radioTouched = Date.now();
+  radioNow = { ...radioNow, ...r };
+  showRadio(radioNow, true);
+  return api('/api/radio', r).catch(() => {});
 }
 $('musicBtn').onclick = () => toggleMusicPanel();
 $('musicClose').onclick = () => toggleMusicPanel(false);
-$('musicForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const r = await api('/api/music', { action: 'play', url: $('musicUrl').value }).catch(() => null);
-  if (!r?.ok) {
-    $('musicErr').hidden = false;
-    return;
-  }
-  $('musicErr').hidden = true;
-  showMusicState({ on: true, title: '' });
-  placeMusicView();
+for (const b of document.querySelectorAll('#musicPanel .rst')) b.onclick = () => radioSend({ on: true, station: b.dataset.st });
+$('radioPlay').onclick = () => radioSend({ on: !radioNow.on, station: radioNow.station });
+let volTimer = 0;
+$('radioVol').oninput = (e) => {
+  const v = Number(e.target.value) / 100;
+  radioTouched = Date.now();
+  radioNow.volume = v;
+  clearTimeout(volTimer);
+  volTimer = setTimeout(() => api('/api/radio', { volume: v }).catch(() => {}), 80);
 };
-$('musicStop').onclick = () =>
-  api('/api/music', { action: 'stop' }).then(() => {
-    showMusicState({ on: false });
-  });
-addEventListener('resize', () => {
-  if (!musicPanelOpen) return;
-  placeMusicPanel();
-  placeMusicView();
-});
-window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴의 '음악 틀기…', '음악 보기'
+addEventListener('resize', () => musicPanelOpen && placeMusicPanel());
+window.openMusicFromMain = () => toggleMusicPanel(true); // 상단바 메뉴에서 부른다
 if (!MINI && q.get('open') === 'music') setTimeout(() => toggleMusicPanel(true), 500);
 
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
