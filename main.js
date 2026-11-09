@@ -364,6 +364,21 @@ function youtubeUrl({ list, v } = {}) {
   return u.href;
 }
 const ytOn = () => !!(ytView && !ytView.webContents.isDestroyed());
+// YouTube 칸에서 바깥으로 나가는 주소는 열지 않는다 (광고 같은 스크립트가 클릭 없이 기본 브라우저를 열지 못하게)
+// YouTube 주소만, 3초에 한 번까지 기본 브라우저로 연다
+let ytOutsideAt = 0;
+function ytOpenOutside(u) {
+  let x;
+  try {
+    x = new URL(u);
+  } catch {
+    return;
+  }
+  if (x.protocol !== 'https:' || !/^((www|m|music)\.)?youtube\.com$|^youtu\.be$/.test(x.hostname)) return;
+  if (Date.now() - ytOutsideAt < 3000) return;
+  ytOutsideAt = Date.now();
+  shell.openExternal(x.href);
+}
 function ytPlay(spec) {
   if (!ytOn()) {
     ytView = new WebContentsView({
@@ -380,14 +395,13 @@ function ytPlay(spec) {
     ytView.setBackgroundColor('#000000');
     ytView.setBorderRadius?.(10); // 음악 칸의 둥근 영상 자리에 맞춘다
     const wc = ytView.webContents;
-    // YouTube 밖으로 나가는 링크는 기본 브라우저로
+    // YouTube 안에서만 옮겨 다니고, 새 창은 열지 않는다 (YouTube 주소만 기본 브라우저로)
     wc.on('will-navigate', (e, u) => {
       if (isYouTubePage(u)) return;
       e.preventDefault();
-      if (/^https?:\/\//.test(u)) shell.openExternal(u);
     });
     wc.setWindowOpenHandler(({ url: u }) => {
-      if (/^https?:\/\//.test(u)) shell.openExternal(u);
+      ytOpenOutside(u);
       return { action: 'deny' };
     });
     wc.on('dom-ready', () => {

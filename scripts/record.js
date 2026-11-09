@@ -49,6 +49,19 @@ function fixture() {
     a({ id: 'f8', name: '이미지 최적화', state: 'working', type: 'codex', app: 'VS Code Codex', tool: 'apply_patch', toolHint: 'images.ts', prompt: '상품 이미지 로딩을 빠르게 해 줘', repo: 'shop-web', branch: 'perf/images' }),
   ];
 }
+// README 그림: 대화 보기에 이전 턴도 보이게 하는 가짜 대화 (내 세션 기록은 쓰지 않는다)
+const CONVO = (id) =>
+  id !== 'f2' || !dir.done
+    ? null
+    : {
+        more: false,
+        turns: [
+          { prompt: '결제 API 응답에 어떤 형식들이 섞여 있는지 먼저 정리해 줘', at: T0 - 50 * 60000, end: T0 - 47 * 60000, tools: 6, interrupted: false,
+            reply: '응답 형식이 세 가지 섞여 있어요.\n\n- `{ success, result }` 4곳\n- `{ ok, data }` 2곳\n- 형식 없이 값만 보내는 곳 1곳' },
+          { prompt: '결제 API 응답 형식을 하나로 맞춰 줘', at: T0 - 40 * 60000, end: dir.doneAt, tools: 31, interrupted: false,
+            reply: '결제 API 응답을 `{ ok, data, error }` 한 가지 형식으로 맞췄어요.\n\n## 바뀐 것\n- 엔드포인트 7개의 응답을 새 형식으로 바꿨어요\n- 클라이언트의 `parsePayment()`도 새 형식에 맞췄어요\n\n| 항목 | 결과 |\n| --- | --- |\n| 바뀐 엔드포인트 | 7개 |\n| 테스트 | 48개 통과 |' },
+        ],
+      };
 const DETECT = {
   orca: { installed: true, enabled: true, ok: true, error: null, agents: 4, working: 2 },
   claude: { found: true, dir: '~/.claude/projects', recent: 18, apps: [{ name: '터미널 Claude', n: 9 }, { name: 'Claude 데스크톱', n: 6 }, { name: 'VS Code Claude', n: 3 }] },
@@ -231,7 +244,7 @@ app.whenReady().then(async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const settingsPath = path.join(os.tmpdir(), `ao-rec-${MODE}.json`);
   fs.writeFileSync(settingsPath, JSON.stringify({ setupDone: true, bossName: '나', map: 'office', sound: false, notify: false, staff: STAFF }));
-  const srv = await startServer({ port: 0, settingsPath, fixture, fixtureDetect: DETECT, getAppIcons });
+  const srv = await startServer({ port: 0, settingsPath, fixture, fixtureConvo: CONVO, fixtureDetect: DETECT, getAppIcons });
   appUrl = srv.url + '&debug=1';
   miniUrl = srv.url + '&mode=mini';
   const stagePath = path.join(os.tmpdir(), 'agent-office-stage.html');
@@ -272,7 +285,7 @@ async function mapServers() {
   for (const m of ['stadium', 'paris']) {
     const sp = path.join(os.tmpdir(), `ao-rec-${m}.json`);
     fs.writeFileSync(sp, JSON.stringify({ setupDone: true, bossName: '나', map: m, sound: false, notify: false, staff: STAFF }));
-    out[m] = await startServer({ port: 0, settingsPath: sp, fixture, fixtureDetect: DETECT, getAppIcons });
+    out[m] = await startServer({ port: 0, settingsPath: sp, fixture, fixtureConvo: CONVO, fixtureDetect: DETECT, getAppIcons });
   }
   return out;
 }
@@ -320,6 +333,8 @@ async function promo() {
   await js('S.click()');
   await inApp("document.getElementById('rSeen').click()");
   await sleep(700);
+  await inApp("document.getElementById('report').hidden || document.getElementById('rClose').click()"); // 다음 보고로 넘어가면 닫는다
+  await sleep(300);
   // 직원 명부
   await js("S.cap('보고를 빨리 읽어 주면 승진해요')");
   const tab = await stagePos('.itabs [data-f=staff]');
@@ -409,6 +424,9 @@ async function stills(srv) {
   await still('report.jpg', CROP);
   await inApp("document.getElementById('rSeen').click()");
   await sleep(600);
+  // 봤어요를 누르면 다음 보고로 넘어가니 대화 창을 닫는다
+  await inApp("document.getElementById('report').hidden || document.getElementById('rClose').click()");
+  await sleep(400);
   // 4) 직원 명부
   await inApp("document.querySelector('.itabs [data-f=staff]').click()");
   await sleep(900);

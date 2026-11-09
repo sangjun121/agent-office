@@ -164,6 +164,7 @@ function startServer({
   updateState, // () => { state, version, notes, progress, error, current }
   fixture,
   fixtureDetect,
+  fixtureConvo, // 점검용: 가짜 대화 기록
 } = {}) {
   const token = crypto.randomBytes(16).toString('hex');
   let settings = loadSettings(settingsPath);
@@ -337,6 +338,11 @@ function startServer({
       if (p === '/api/open-window') {
         openWindow?.({ look: body.look === true, setup: Number(body.setup) || 0 });
         return json(res, 200, { ok: !!openWindow });
+      }
+      if (p === '/api/conversation') {
+        const id = String(body.id || '').slice(0, 300);
+        const c = id ? (fixtureConvo ? fixtureConvo(id) : watcher.conversationOf(id)) : null;
+        return json(res, 200, c ? { ok: true, ...c } : { ok: false });
       }
       if (p === '/api/update') {
         if (!['check', 'install'].includes(body.action)) return json(res, 400, { ok: false });

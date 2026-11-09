@@ -403,4 +403,77 @@ function detectLocal() {
   return { claude, codex };
 }
 
-module.exports = { scanLocal, detectLocal, CLAUDE_DIR, CODEX_DIR };
+// ---------- 대화 기록: '대화 보기' 창에 최근 몇 턴을 보여 준다 (이 Mac의 기록 파일을 읽기만 한다) ----------
+// 한 턴 = 내가 시킨 말 하나와, 그 뒤 에이전트가 남긴 답(도구 실행 내용은 빼고 횟수만)
+const TURNS_MAX = 8;
+const clip = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);
+const newTurn = (prompt, at) => ({ prompt, at, reply: [], tools: 0, interrupted: false, end: 0 });
+function claudeTurns(lines) {
+  const turns = [];
+  let cur = null;
+  for (const j of lines) {
+    if ((j.type !== 'user' && j.type !== 'assistant') || j.isSidechain) continue;
+    if (j.type === 'user') {
+      if (isRealPrompt(j)) turns.push((cur = newTurn(textOf(j), ts(j.timestamp))));
+      else if (cur && /\[Request interrupted/.test(textOf(j))) cur.interrupted = true;
+      continue;
+    }
+    if (!cur) continue;
+    const c = j.message?.content;
+    if (typeof c === 'string') {
+      if (c.trim()) cur.reply.push(c);
+    } else
+      for (const x of c || []) {
+        if (x.type === 'text' && x.text && x.text.trim()) cur.reply.push(x.text);
+        else if (x.type === 'tool_use') cur.tools++;
+      }
+    cur.end = ts(j.timestamp) || cur.end;
+  }
+  return turns;
+}
+function codexTurns(lines) {
+  const turns = [];
+  let cur = null;
+  for (const j of lines) {
+    const p = j.payload || {};
+    if (j.type === 'response_item') {
+      if (p.type === 'message' && p.role === 'user') {
+        const t = (p.content || []).filter((c) => c.type === 'input_text').map((c) => c.text).join('\n');
+        if (t.trim() && !/^\s*</.test(t)) turns.push((cur = newTurn(t, ts(j.timestamp))));
+      } else if (cur && p.type === 'message' && p.role === 'assistant') {
+        const t = (p.content || []).filter((c) => c.type === 'output_text').map((c) => c.text).join('\n');
+        if (t.trim()) cur.reply.push(t);
+        cur.end = ts(j.timestamp) || cur.end;
+      } else if (cur && /call$/.test(p.type || '')) cur.tools++;
+    } else if (cur && j.type === 'event_msg' && /^(turn|task)_aborted$/.test(p.type || '')) cur.interrupted = true;
+  }
+  return turns;
+}
+function conversation(id) {
+  let file = '';
+  for (const [f, c] of cache) if (c.agent && c.agent.id === id) file = f;
+  if (!file) return null;
+  let st;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    return null;
+  }
+  const start = Math.max(0, st.size - 3e6);
+  const lines = parseLines(readRange(file, start, st.size - start), start > 0);
+  const all = (id.startsWith('codex:') ? codexTurns : claudeTurns)(lines);
+  if (!all.length) return null;
+  return {
+    turns: all.slice(-TURNS_MAX).map((t) => ({
+      prompt: clip(t.prompt.trim(), 4000),
+      at: t.at,
+      end: t.end,
+      reply: clip(t.reply.join('\n\n').trim(), 16000),
+      tools: t.tools,
+      interrupted: t.interrupted,
+    })),
+    more: all.length > TURNS_MAX || start > 0,
+  };
+}
+
+module.exports = { scanLocal, detectLocal, conversation, CLAUDE_DIR, CODEX_DIR };

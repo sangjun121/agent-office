@@ -3,7 +3,7 @@
 const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const { scanLocal, CLAUDE_DIR, CODEX_DIR } = require('./sources.js');
+const { scanLocal, conversation, CLAUDE_DIR, CODEX_DIR } = require('./sources.js');
 
 const CANDIDATES = ['/Applications/Orca.app/Contents/Resources/bin/orca', '/usr/local/bin/orca', '/opt/homebrew/bin/orca'];
 const ORCA =
@@ -99,6 +99,7 @@ function friendly(err, stdout) {
 
 // fixture: 스크린샷용 가짜 에이전트 (지난 시간 → 에이전트 목록). 주면 실제 기록은 읽지 않는다.
 function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered, getSettings = () => ({}), persist, fixture } = {}) {
+  let lastSide = []; // Orca가 띄운 이 Mac의 세션 (대화 보기에서 쓴다)
   const startedAt = Date.now();
   const state = { ok: false, error: null, at: 0, agents: [], reports: [], orca: ORCA, sources: { orca: false, claude: false, codex: false } };
   let prev = null;
@@ -279,6 +280,7 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
         });
       } catch {}
       fillOrcaMessages(orca, local.orcaSide || []);
+      lastSide = local.orcaSide || [];
       state.sources = {
         orca: !!list,
         claude: src.claude !== false && fs.existsSync(CLAUDE_DIR),
@@ -358,6 +360,19 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
       return id;
     },
     pollNow: () => poll(),
+    // 대화 보기: 최근 몇 턴. Orca 에이전트는 Orca가 이 Mac에서 띄운 세션 기록 중 같은 대화를 찾아 읽는다
+    conversationOf(id) {
+      if (/^(claude|codex):/.test(id)) return conversation(id);
+      const a = state.agents.find((x) => x.id === id);
+      if (!a || a.app !== 'Orca') return null;
+      const side = lastSide.filter((s) => s.worktree.path === a.worktree.path);
+      const head = normText(a.fpText || a.message || '').slice(0, 120);
+      const pick =
+        (head && side.find((s) => normText(s.message).startsWith(head))) ||
+        (a.prompt && side.find((s) => normText(s.prompt) === normText(a.prompt))) ||
+        (side.length === 1 ? side[0] : null);
+      return pick ? conversation(pick.id) : null;
+    },
     orcaInfo() {
       const installed = ORCA !== 'orca';
       return {

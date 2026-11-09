@@ -1153,7 +1153,7 @@ function renderInbox() {
     seen: (r) => r.seen,
   };
   const list = all.filter(FILTERS[inboxFilter] || FILTERS.all);
-  const sig = JSON.stringify([inboxFilter, list.map((r) => [r.id, r.read]), Math.floor(Date.now() / 60000)]);
+  const sig = JSON.stringify([inboxFilter, openReportId, list.map((r) => [r.id, r.read, nickOf(r.agentId)]), Math.floor(Date.now() / 60000)]);
   if (sig === inboxSig) return;
   inboxSig = sig;
   if (!list.length) {
@@ -1164,21 +1164,21 @@ function renderInbox() {
           ? '여기는 비어 있어요.'
           : all.length
             ? '다 봤어요 👏<br>본 보고는 \'본 것\' 탭에 있어요.'
-            : '에이전트가 일을 끝낼 때마다<br>여기에 보고가 쌓여요.<br>🧪 연습을 눌러 미리 볼 수도 있어요.';
+            : '에이전트가 일을 끝낼 때마다<br>여기에 보고가 쌓여요.<br><button type="button" class="btn ghost sm" data-demo>연습 보고 받아 보기</button>';
     $('inboxList').innerHTML = `<li class="empty">${empty}</li>`;
     return;
   }
   $('inboxList').innerHTML = list
     .map((r) => {
-      const ic = kindIco(r.kind);
-      const where = [r.app, r.repo, r.branch].filter(Boolean).join(' · ');
-      const text = r.kind === 'attention' ? '답이나 허락을 기다리고 있어요' : clean(r.message) || '보고 내용이 없어요';
+      const where = [r.app, r.repo].filter(Boolean).join(' · ');
+      const text = r.kind === 'attention' ? clean(r.message) || '허락이나 답을 기다려요' : clean(r.message) || (r.kind === 'interrupted' ? '중간에 멈췄어요' : '남긴 답이 없어요');
       const act = r.seen
         ? `<button type="button" class="iact" data-act="unsee" title="보고함 목록으로 되돌려요">${ico('undo')}되돌리기</button>`
         : `<button type="button" class="iact" data-act="seen" title="목록에서 빼요. '본 것' 탭에서 다시 볼 수 있어요.">${ico('check')}봤어요</button>`;
       const nick = nickOf(r.agentId);
       const at = [nick ? r.name : '', where].filter(Boolean).join(' · '); // 이름을 붙였으면 작업 이름은 아래 줄로
-      return `<li class="k-${r.kind}${r.read ? '' : ' unread'}" data-id="${esc(r.id)}"><span class="ic">${ic}</span><b>${esc(nick || r.name)}</b><small>${esc(at)}${at ? ' · ' : ''}${ago(r.at)}</small><p>${esc(text)}</p>${act}</li>`;
+      const k = kc(r.kind);
+      return `<li class="k-${k}${r.read ? '' : ' unread'}${r.id === openReportId ? ' on' : ''}" data-id="${esc(r.id)}"><span class="iav" style="--c:${esc(agentColor(r.agentId))}">${kindIco(k)}</span><div class="itx"><div class="itop"><b>${esc(nick || r.name)}</b><time>${esc(ago(r.at))}</time></div><small><em class="kchip k-${k}">${KIND_KO[k] || ''}</em>${esc(at)}</small><p>${esc(text)}</p></div>${act}</li>`;
     })
     .join('');
 }
@@ -1243,62 +1243,191 @@ function drawStatus(st) {
   statusTex.needsUpdate = true;
 }
 
-// ---------- 보고 자세히 ----------
+// ---------- 대화 보기: 보고함이나 캐릭터를 누르면 그 에이전트와 나눈 대화를 채팅처럼 보여 준다 ----------
+// 먼저 아는 것(마지막으로 시킨 일과 답)으로 그리고, 이 Mac의 세션 기록에서 최근 대화를 읽어 오면 바꿔 그린다.
 let openReportId = null;
-function openReport(r) {
-  openReportId = r.id;
-  const icon = $('rIcon');
-  icon.innerHTML = kindIco(r.kind);
-  icon.className = `ricon k-${r.kind}`;
-  $('rTitle').textContent = nickOf(r.agentId) || r.name;
-  $('rMeta').textContent = [r.app || typeLabel(r.type), r.repo, r.branch, `${new Date(r.at).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}`]
-    .filter(Boolean)
-    .join(' · ');
-  $('rPrompt').textContent = r.prompt || '받은 일 기록이 없어요.';
-  $('rMsgTitle').textContent = r.kind === 'attention' ? '지금 상태' : '보고';
-  $('rMessage').innerHTML = md(
-    r.kind === 'attention'
-      ? `답이나 허락을 기다리고 있어요. ${r.app || '앱'}에서 확인해 주세요.${r.message ? `\n\n마지막으로 한 말:\n\n${r.message}` : ''}`
-      : r.message || '보고 내용이 없어요.',
-  );
-  // Orca가 잘라 준 답변을 이 Mac의 기록으로 못 채웠을 때만 알려 준다
-  const ml = (r.message || '').length;
-  $('rNote').textContent = r.app === 'Orca' && ml >= 190 && ml <= 200 ? 'Orca가 마지막 답변의 앞부분만 알려 줘서 여기까지 보여요. 전체는 Orca에서 확인해요.' : '';
-  $('rFolder').hidden = !r.path;
-  $('rOrca').textContent = r.canSession ? '세션 열기' : `${r.app || '앱'} 열기`;
-  $('rOrca').title = r.canSession ? `${r.app}에서 이 세션을 바로 열어요` : '';
-  $('rOrca').hidden = !r.app || r.demo;
-  $('rSeen').hidden = !!r.seen;
+let cvAgentId = null;
+let cvSeq = 0;
+let cvNavIds = [];
+let cvReply = '';
+const KIND_KO = { done: '완료', attention: '허락 필요', interrupted: '중단됨' };
+const KINDS = new Set(['done', 'attention', 'interrupted', 'working', 'rest', 'boss']);
+const kc = (k) => (KINDS.has(k) ? k : 'done');
+const AV_COLORS = ['#3D6FD8', '#E07A5F', '#2E8B57', '#8A5CF6', '#D9A21B', '#1F9AA8'];
+const agentColor = (id) => agents.get(id)?.av.look.cloth || AV_COLORS[Math.abs(hashStr(String(id))) % AV_COLORS.length];
+const plainStatus = (d, role) => statusText(d, role).replace(/^\S+\s/, '');
+function when(at) {
+  if (!at) return '';
+  const d = new Date(at);
+  const today = new Date().toDateString() === d.toDateString();
+  return d.toLocaleString('ko-KR', today ? { hour: 'numeric', minute: '2-digit' } : { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function convoKind(r, d) {
+  if (r) return kc(r.kind);
+  if (d.state === 'blocked' || d.state === 'waiting') return 'attention';
+  if (ACTIVE.has(d.state)) return 'working';
+  return d.interrupted ? 'interrupted' : 'done';
+}
+function openReport(r, skip) {
+  openConvo({ r, skip });
+}
+// 캐릭터에서 열면: 일하는 중이 아니고 그 에이전트의 보고가 있으면 보고로, 아니면 지금 상태로
+function openAgentConvo(a) {
+  const r = (lastState.reports || []).filter((x) => x.agentId === a.id).sort((x, y) => y.at - x.at)[0];
+  openConvo(r && !ACTIVE.has(a.data.state) ? { r } : { a });
+}
+function openConvo({ r = null, a = null, skip = null }) {
+  const d = r ? agents.get(r.agentId)?.data || null : a.data;
+  const src = r || d;
+  const agentId = r ? r.agentId : a.id;
+  const kind = convoKind(r, d);
+  const app = src.app || typeLabel(src.type);
+  openReportId = r ? r.id : null;
+  cvAgentId = agentId;
+  const seq = ++cvSeq;
+  // 머리: 캐릭터 색 동그라미와 상태 표시, 이름, 상태 · 앱 · 저장소 · 시각
+  $('cvAv').style.background = agentColor(agentId);
+  $('cvAv').innerHTML = `<span class="cvk k-${kind}">${kind === 'working' ? ico('work') : kindIco(kind)}</span>`;
+  const name = nickOf(agentId) || src.name;
+  $('cvName').textContent = name;
+  const at = r ? r.at : d.updatedAt || Date.now();
+  const where = [app, r ? r.repo : d.worktree?.repo, r ? r.branch : d.worktree?.branch].filter(Boolean).join(' · ');
+  $('cvMeta').innerHTML = `<em class="kchip k-${kind}">${esc(kind === 'working' ? plainStatus(d) : KIND_KO[kind])}</em>${esc(where)}<span title="${esc(new Date(at).toLocaleString('ko-KR'))}"> · ${ago(at)}</span>`;
+  // 보고함에서 열면 이전/다음 보고로 넘길 수 있다 (←, →)
+  cvNavIds = r ? [...$('inboxList').querySelectorAll('li[data-id]')].map((li) => li.dataset.id).filter((id) => id !== skip) : [];
+  const pos = cvNavIds.indexOf(openReportId);
+  $('cvNav').hidden = pos < 0 || cvNavIds.length < 2;
+  $('cvPos').textContent = `${pos + 1} / ${cvNavIds.length}`;
+  $('cvPrev').disabled = pos <= 0;
+  $('cvNext').disabled = pos < 0 || pos >= cvNavIds.length - 1;
+  // 아래 버튼: 허락이 필요하면 '앱에서 답하기'가 주 버튼
+  $('rFolder').hidden = !(r ? r.path : d.worktree?.path);
+  $('rOrca').hidden = !src.app || !!src.demo;
+  $('rOrca').textContent = kind === 'attention' ? `${app}에서 답하기` : src.canSession ? '세션 열기' : `${app} 열기`;
+  $('rOrca').classList.toggle('ghost', kind !== 'attention');
+  $('rSeen').hidden = !r || !!r.seen;
+  $('rSeen').classList.toggle('ghost', kind === 'attention');
+  const ctx = { kind, app, agentId, r, d, name };
+  drawConvo([{ prompt: src.prompt || '', reply: kind === 'working' ? '' : src.message || '', at: 0, end: at, tools: 0, interrupted: kind === 'interrupted' }], false, { ...ctx, partial: true });
   $('report').hidden = false;
   UI.openLayer('report', closeReport);
-  if (!r.read) {
+  if (!src.demo)
+    api('/api/conversation', { id: agentId })
+      .then((res) => {
+        if (seq === cvSeq && !$('report').hidden && res?.ok && res.turns?.length) drawConvo(res.turns, res.more, ctx);
+      })
+      .catch(() => {});
+  if (r && !r.read) {
     r.read = true;
     api('/api/read', { id: r.id }).then(refresh);
-    renderInbox();
   }
+  inboxSig = '';
+  renderInbox();
+}
+function drawConvo(turns, more, ctx) {
+  const color = esc(agentColor(ctx.agentId));
+  const out = [];
+  if (more) out.push(`<p class="cvmore">더 이전 대화는 ${esc(ctx.app)}에서 볼 수 있어요</p>`);
+  turns.forEach((t, i) => {
+    const last = i === turns.length - 1;
+    out.push(`<div class="turn${last ? ' last' : ''}">`);
+    t = { ...t, prompt: String(t.prompt || ''), reply: String(t.reply || '') };
+    if (t.prompt) {
+      const long = t.prompt.length > 500;
+      out.push(`<div class="msg me"><div class="cbub${long ? ' long' : ''}">${esc(t.prompt)}</div>${long ? '<button type="button" class="more">전체 보기</button>' : ''}<small>나${Number(t.at) ? ` · ${when(Number(t.at))}` : ''}</small></div>`);
+    }
+    let body = '';
+    if (t.reply) body = md(t.reply);
+    else if (last && ctx.kind === 'working') body = '<p class="none">답을 쓰는 중이에요…</p>';
+    else if (!(last && ctx.kind === 'attention')) body = '<p class="none">남긴 답이 없어요</p>';
+    if (body) {
+      const tools = Math.max(0, Math.floor(Number(t.tools) || 0));
+      const meta = [esc(ctx.name), Number(t.end) ? when(Number(t.end)) : '', tools ? `도구 ${tools}번` : '', t.interrupted === true ? '중단됨' : ''].filter(Boolean).join(' · ');
+      out.push(`<div class="msg ag"><span class="mav" style="background:${color}"></span><div class="mcol"><div class="cbub md">${body}</div><small>${meta}</small></div></div>`);
+    }
+    out.push('</div>');
+  });
+  const note = (k, icon, b, sub) => `<div class="cvnote k-${k}">${ico(icon)}<div><b>${b}</b><span>${sub}</span></div></div>`;
+  if (ctx.kind === 'attention') out.push(note('attention', 'attn', `${esc(ctx.app)}에서 허락이나 답을 기다리고 있어요`, '답해 주면 이어서 일해요.'));
+  else if (ctx.kind === 'working') out.push(note('working', 'work', '지금 일하는 중이에요', esc([plainStatus(ctx.d), ctx.d?.toolHint].filter(Boolean).join(' · '))));
+  else if (ctx.kind === 'interrupted') out.push(note('interrupted', 'pause', '중간에 멈췄어요', `${esc(ctx.app)}에서 이어서 시킬 수 있어요.`));
+  // Orca가 잘라 준 답을 이 Mac의 기록으로 못 채웠을 때만 알려 준다
+  const ml = (ctx.r?.message || '').length;
+  if (ctx.partial && ctx.r?.app === 'Orca' && ml >= 190 && ml <= 200) out.push('<p class="cvmore">Orca가 마지막 답의 앞부분만 알려 줘서 여기까지 보여요. 전체는 Orca에서 볼 수 있어요.</p>');
+  const body = $('cvBody');
+  body.innerHTML = out.join('');
+  cvReply = turns[turns.length - 1]?.reply || '';
+  $('cvCopy').hidden = !cvReply;
+  // 긴 대화도 지금 보고(마지막으로 시킨 일)부터 읽게
+  const lt = body.querySelector('.turn.last');
+  body.scrollTop = lt && turns.length > 1 ? Math.max(0, lt.offsetTop - 14) : 0;
 }
 function closeReport() {
   $('report').hidden = true;
   UI.closeLayer('report');
   openReportId = null;
+  cvAgentId = null;
+  cvSeq++;
+  inboxSig = '';
+  renderInbox();
 }
 const currentReport = () => (lastState.reports || []).find((r) => r.id === openReportId);
+function cvGo(step) {
+  const id = cvNavIds[cvNavIds.indexOf(openReportId) + step];
+  const r = id && (lastState.reports || []).find((x) => x.id === id);
+  if (r) openReport(r);
+}
+$('cvPrev').onclick = () => cvGo(-1);
+$('cvNext').onclick = () => cvGo(1);
+addEventListener('keydown', (e) => {
+  if ($('report').hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.('input, textarea')) return;
+  if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    e.preventDefault();
+    cvGo(e.code === 'ArrowLeft' ? -1 : 1);
+  }
+});
+// 긴 질문은 접어 두고 '전체 보기'로 펼친다
+$('cvBody').addEventListener('click', (e) => {
+  const b = e.target.closest('.more');
+  if (!b) return;
+  b.textContent = b.previousElementSibling.classList.toggle('long') ? '전체 보기' : '접기';
+});
 $('rClose').onclick = closeReport;
-$('rOk').onclick = closeReport;
+// 봤어요: 목록에서 빼고 다음 보고로 넘어간다 (마지막이면 닫는다)
 $('rSeen').onclick = () => {
   const id = openReportId;
-  closeReport();
-  if (id) setSeen([id], true);
+  if (!id) return closeReport();
+  const i = cvNavIds.indexOf(id);
+  const nextId = cvNavIds[i + 1] || cvNavIds[i - 1];
+  setSeen([id], true);
+  const nr = nextId && inboxFilter !== 'seen' && (lastState.reports || []).find((x) => x.id === nextId && !x.seen);
+  if (nr) openReport(nr, id);
+  else closeReport();
 };
 $('rOrca').onclick = () => {
-  const r = currentReport();
-  if (r?.app) api('/api/open-app', { app: r.app, id: r.agentId });
+  const app = currentReport()?.app || agents.get(cvAgentId)?.data.app;
+  if (app) api('/api/open-app', { app, id: cvAgentId });
 };
 $('rFolder').onclick = () => {
-  const r = currentReport();
-  if (r?.path) api('/api/open-folder', { path: r.path });
+  const p = currentReport()?.path || agents.get(cvAgentId)?.data.worktree?.path;
+  if (p) api('/api/open-folder', { path: p });
+};
+$('cvCopy').onclick = async () => {
+  if (!cvReply) return;
+  try {
+    await navigator.clipboard.writeText(cvReply);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = cvReply;
+    document.body.append(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+  UI.toast('답을 복사했어요', '', 1600);
 };
 $('inboxList').addEventListener('click', (e) => {
+  if (e.target.closest('[data-demo]')) return $('demoBtn').click();
   const li = e.target.closest('li[data-id]');
   if (!li) return;
   const act = e.target.closest('[data-act]');
@@ -1780,9 +1909,18 @@ canvas.addEventListener(
 );
 
 let cardAgent = null;
+// 이름은 글자로 보여 주고, 연필(또는 두 번 누르기)로 바꾼다
+function setCardEditing(on) {
+  $('card').querySelector('.cname').hidden = on;
+  $('cardRename').hidden = on;
+  $('cardName').hidden = !on;
+  if (on) {
+    $('cardName').focus();
+    $('cardName').select();
+  }
+}
 function showCard(hit, x, y) {
   const card = $('card');
-  let btns;
   const cl = card.querySelector('.cloyal');
   const sf = hit.boss ? null : staffOfAgent(hit.agent.data);
   cl.hidden = !sf;
@@ -1792,42 +1930,48 @@ function showCard(hit, x, y) {
       sf.last ? `<small class="llast">최근: ${esc(sf.last.why)} ${sf.last.delta > 0 ? '+' : ''}${sf.last.delta}</small>` : ''
     }`;
   }
-  // 이름 칸: 나는 내 이름, 에이전트는 내가 붙여 줄 이름 (비우면 원래 작업 이름)
-  card.querySelector('.cname').hidden = true;
-  $('cardName').hidden = false;
+  setCardEditing(false);
   $('cardName').maxLength = hit.boss ? 16 : 20;
   $('cardName').placeholder = hit.boss ? '나' : hit.agent.data.name || '에이전트';
   $('cardName').setAttribute('aria-label', hit.boss ? '내 이름' : '에이전트 이름');
+  let btns;
+  let name;
   if (hit.boss) {
     cardAgent = null;
     const n = [...agents.values()].filter((a) => ACTIVE.has(a.data.state)).length;
-    $('cardName').value = me.lbl.nm.textContent || '나';
-    card.querySelector('.cstat').textContent = n ? `에이전트 ${n}명이 일하는 중이에요` : '지금은 다들 쉬는 중이에요';
-    card.querySelector('.cbody').textContent = '이름은 위 칸에서 바로 바꿀 수 있어요. 방향키로 걷고, F로 앉고, G로 종이 총을 꺼내요.';
-    card.querySelector('.cdot').style.background = bossLook.cloth;
+    name = me.lbl.nm.textContent || '나';
+    card.querySelector('.cstat').innerHTML = `<em class="kchip k-boss">사장님</em>${n ? `에이전트 ${n}명이 일하는 중이에요` : '지금은 다들 쉬는 중이에요'}`;
+    card.querySelector('.cbody').innerHTML = '<p class="ctip">방향키로 걷고, F로 앉고, V를 누르면 내 눈높이로 봐요.</p>';
+    card.querySelector('.cav').style.background = bossLook.cloth;
     btns = `<button type="button" class="btn" data-c="look">${ico('face')}꾸미기</button>`;
   } else {
     const a = hit.agent;
-    cardAgent = a;
     const d = a.data;
-    $('cardName').value = nameOf(d);
-    card.querySelector('.cstat').textContent = [statusText(d, a.role), d.app || typeLabel(d.type), d.worktree?.repo].filter(Boolean).join(' · ');
-    const lines = [];
-    if (nickOf(d.id)) lines.push(`작업: ${d.name}`);
-    if (d.prompt) lines.push(`받은 일: ${short(clean(d.prompt), 120)}`);
-    if (d.state === 'working' && d.toolHint) lines.push(`지금: ${d.toolHint}`);
-    if (d.message && !ACTIVE.has(d.state)) lines.push(`마지막 말: ${short(clean(d.message), 140)}`);
-    card.querySelector('.cbody').textContent = lines.join('\n');
-    card.querySelector('.cdot').style.background = a.av.look.cloth;
-    const hasReport = (lastState.reports || []).some((r) => r.agentId === a.id);
-    btns = `${hasReport ? '<button type="button" class="btn ghost" data-c="report">보고 보기</button>' : ''}${
-      d.app && !d.demo ? `<button type="button" class="btn" data-c="app">${d.canSession ? '세션 열기' : `${esc(d.app)} 열기`}</button>` : ''
-    }${a.role === 'rest' ? `<button type="button" class="btn ghost" data-c="home">${ico('home')}퇴근시키기</button>` : ''}`;
+    cardAgent = a;
+    name = nameOf(d);
+    const kind = a.role === 'rest' ? 'rest' : convoKind(null, d);
+    card.querySelector('.cstat').innerHTML = `<em class="kchip k-${kind}">${esc(plainStatus(d, a.role))}</em>${esc([d.app || typeLabel(d.type), d.worktree?.repo].filter(Boolean).join(' · '))}`;
+    const rows = [];
+    if (nickOf(d.id)) rows.push(['작업', d.name, '']);
+    if (d.prompt) rows.push(['받은 일', clean(d.prompt), 'c3']);
+    if (ACTIVE.has(d.state) && d.toolHint) rows.push(['지금', d.toolHint, '']);
+    else if (d.message && !ACTIVE.has(d.state)) rows.push([kind === 'attention' ? '마지막 말' : '마지막 답', clean(d.message), 'c3']);
+    card.querySelector('.cbody').innerHTML = rows.map(([k, v, c]) => `<div class="crow"><span>${k}</span><p${c ? ` class="${c}"` : ''}>${esc(v)}</p></div>`).join('');
+    card.querySelector('.cav').style.background = a.av.look.cloth;
+    const talk = d.prompt || d.message ? `<button type="button" class="btn${kind === 'attention' ? ' ghost' : ''}" data-c="talk">대화 보기</button>` : '';
+    const open =
+      d.app && !d.demo
+        ? `<button type="button" class="btn${kind === 'attention' || !talk ? '' : ' ghost'}" data-c="app">${kind === 'attention' ? `${esc(d.app)}에서 답하기` : d.canSession ? '세션 열기' : `${esc(d.app)} 열기`}</button>`
+        : '';
+    btns = (kind === 'attention' ? open + talk : talk + open) + (a.role === 'rest' ? `<button type="button" class="btn ghost cgo" data-c="home">${ico('home')}퇴근시키기</button>` : '');
   }
+  card.querySelector('.cname').textContent = name;
+  $('cardName').value = name;
   card.querySelector('.cbtns').innerHTML = btns;
-  card.style.left = clamp(x + 14, 8, innerWidth - 296) + 'px';
-  card.style.top = clamp(y - 30, 8, innerHeight - 220) + 'px';
   card.hidden = false;
+  const box = card.getBoundingClientRect();
+  card.style.left = clamp(x + 14, 8, innerWidth - box.width - 8) + 'px';
+  card.style.top = clamp(y - 30, 8, innerHeight - box.height - 8) + 'px';
   UI.openLayer('card', hideCard, false);
 }
 function hideCard() {
@@ -1836,6 +1980,18 @@ function hideCard() {
   UI.closeLayer('card');
 }
 $('cardClose').onclick = hideCard;
+$('cardRename').onclick = () => setCardEditing(true);
+$('card').querySelector('.cname').addEventListener('dblclick', () => setCardEditing(true));
+// 이름 칸을 벗어나거나 Enter, Esc를 누르면 글자로 돌아간다 (저장은 원래 change 처리에서)
+function endCardEdit() {
+  if ($('card').hidden || $('cardName').hidden) return;
+  $('card').querySelector('.cname').textContent = $('cardName').value.trim() || $('cardName').placeholder;
+  setCardEditing(false);
+}
+$('cardName').addEventListener('blur', endCardEdit);
+$('cardName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === 'Escape') setTimeout(endCardEdit, 0);
+});
 $('card').addEventListener('click', (e) => {
   const c = e.target.closest('[data-c]')?.dataset.c;
   if (!c) return;
@@ -1844,10 +2000,7 @@ $('card').addEventListener('click', (e) => {
   if (c === 'look') openLook();
   else if (c === 'home' && a) sendHome(a);
   else if (c === 'app' && a?.data.app) api('/api/open-app', { app: a.data.app, id: a.id });
-  else if (c === 'report' && a) {
-    const r = (lastState.reports || []).find((x) => x.agentId === a.id);
-    if (r) openReport(r);
-  }
+  else if (c === 'talk' && a) openAgentConvo(a);
 });
 function openLook() {
   if (MINI) return api('/api/open-window', { look: true });
@@ -2300,6 +2453,8 @@ $('ytStop').onclick = () => {
   showYT({ on: false }, true);
 };
 $('musicPanel').addEventListener('animationend', placeYT);
+// 영상 칸의 크기가 바뀌면 YouTube 화면도 다시 맞춘다
+new ResizeObserver(() => placeYT()).observe($('ytStage'));
 for (const b of document.querySelectorAll('#musicPanel .mtab')) b.onclick = () => setMusicTab(b.dataset.src);
 // ---------- 업데이트 버튼: 새 버전이 있을 때만 켜진다 (누르면 받아서 바꾸고 앱이 다시 켜진다) ----------
 let updNow = { state: 'idle' };
