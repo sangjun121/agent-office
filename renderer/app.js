@@ -2396,7 +2396,7 @@ function frame(now = performance.now()) {
   const dt = Math.min(0.05, clock.getDelta());
   t += dt;
   // 위에서 내려다볼 때는 캐릭터가 고개를 살짝 들어서 얼굴이 보인다 (1인칭, 창문 보기에서는 그대로)
-  const HEAD_TILT = fpv.on || win.on ? 0 : -0.24;
+  const HEAD_TILT = fpv.on || win.on ? 0 : -0.34; // 머리가 커서 위에서 보면 정수리가 넓다. 그만큼 고개를 더 든다
   updateMe(dt);
   for (const a of agents.values()) {
     if (a.mode === 'walk') stepWalk(a, dt);

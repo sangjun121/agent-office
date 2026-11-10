@@ -9,6 +9,10 @@ import { drawMark } from './brand.js';
 const PI = Math.PI;
 export const HEAD_Y = 0.86;
 const HEAD_R = 0.3;
+// 2등신 비율: 머리는 키우고 몸은 줄인다. 머리에 붙는 것(머리카락, 귀, 모자, 안경)은 머리와 함께 커진다
+const HEAD_K = 1.22;
+const BODY_S = [0.95, 0.86, 0.946]; // 몸통과 몸에 붙는 것(목도리, 가방, 꼬리)을 같은 비율로 줄인다
+const BODY_Y = 0.012;
 
 const G = {
   head: new THREE.SphereGeometry(HEAD_R, 32, 22),
@@ -153,18 +157,19 @@ function drawMuzzle(g, m, light, nose) {
 // 귀여워 보이는 비율로 그린다: 큰 눈이 얼굴 가운데보다 조금 아래에 넓게 놓이고, 입은 작고, 볼이 발그레하다.
 // (예전에는 눈이 머리 지름의 7%쯤인 작은 점이라 얼굴이 비어 보였다)
 const INK = '#2A2320';
-const EYE_L = 74; // 눈 가운데 (256칸 그림 기준). 안경 자리(EYE_X, EYE_Y)도 여기에 맞춘다
-const EYE_R = 182;
-const EYE_Y = 127;
+const EYE_K = 1.18; // 눈 크기 (큰 머리에 맞춰 눈도 크게)
+const EYE_L = 68; // 눈 가운데 (256칸 그림 기준). 안경 자리(EYE_X, EYE_Y)도 여기에 맞춘다
+const EYE_R = 188;
+const EYE_Y = 124;
 // kind: 'human' 사람 | 'animal' 코와 ㅅ 입을 그리는 동물 | 'eyes' 눈만 (부리, 주둥이는 따로 붙인다). nose 는 코 색
 // eye: 'dot' 까만 눈 | 'white' 흰자위가 있는 또렷한 눈 | 'lid' 눈꺼풀이 반쯤 내려온 눈 (lid 는 눈꺼풀 색)
 function drawFace(g, expr, mode, kind = 'human', nose = '#3A2A26', rim = false, eye = 'dot', lid = '#C9A27A') {
   g.clearRect(0, 0, 256, 256);
   // 볼
   g.fillStyle = 'rgba(255,112,132,.36)';
-  for (const x of [36, 220]) {
+  for (const x of [30, 226]) {
     g.beginPath();
-    g.ellipse(x, 166, 25, 15, 0, 0, PI * 2);
+    g.ellipse(x, 174, 24, 14, 0, 0, PI * 2);
     g.fill();
   }
   const line = rim ? '#FFFFFF' : INK; // 감은 눈, 웃는 눈의 선
@@ -174,6 +179,7 @@ function drawFace(g, expr, mode, kind = 'human', nose = '#3A2A26', rim = false, 
   g.lineWidth = 8;
   // 눈: 세로로 조금 긴 까만 눈에 반짝임 둘
   const dot = (x, y, big = 1) => {
+    big *= EYE_K;
     if (eye !== 'dot') {
       // 흰자위 + 큰 눈동자 + 위 눈꺼풀 선
       const sx = x < 128 ? 1 : -1; // 눈동자는 살짝 안쪽으로
@@ -237,22 +243,22 @@ function drawFace(g, expr, mode, kind = 'human', nose = '#3A2A26', rim = false, 
   };
   const happy = (x, y) => {
     g.beginPath();
-    g.arc(x, y + 12, 17, PI * 1.15, PI * 1.85);
+    g.arc(x, y + 14, 20, PI * 1.15, PI * 1.85);
     g.stroke();
   };
   const closed = (x, y) => {
     g.beginPath();
-    g.arc(x, y - 10, 17, PI * 0.15, PI * 0.85);
+    g.arc(x, y - 12, 20, PI * 0.15, PI * 0.85);
     g.stroke();
   };
   const halfOpen = (x, y) => {
     g.fillStyle = INK;
     g.beginPath();
-    g.ellipse(x, y + 2, 17, 15, 0, 0, PI);
+    g.ellipse(x, y + 2, 20, 18, 0, 0, PI);
     g.fill();
     g.beginPath();
-    g.moveTo(x - 20, y + 1);
-    g.lineTo(x + 20, y + 1);
+    g.moveTo(x - 23, y + 1);
+    g.lineTo(x + 23, y + 1);
     g.stroke();
   };
   const L = EYE_L;
@@ -261,8 +267,8 @@ function drawFace(g, expr, mode, kind = 'human', nose = '#3A2A26', rim = false, 
   if (mode === 'blink') {
     for (const x of [L, Rx]) {
       g.beginPath();
-      g.moveTo(x - 16, EY + 4);
-      g.lineTo(x + 16, EY + 4);
+      g.moveTo(x - 19, EY + 4);
+      g.lineTo(x + 19, EY + 4);
       g.stroke();
     }
   } else if (mode === 'happy') {
@@ -443,8 +449,8 @@ export class Avatar {
     this.shadow = shadow;
 
     this.torso = this.mesh(G.torso, null, this.body);
-    this.torso.position.y = 0.37;
-    this.torso.scale.set(1, 1, 0.92);
+    this.torso.position.y = 0.37 * BODY_S[1] + BODY_Y;
+    this.torso.scale.set(BODY_S[0], BODY_S[1], 0.92 * BODY_S[2]);
 
     this.head = new THREE.Group();
     this.head.position.y = HEAD_Y;
@@ -482,6 +488,8 @@ export class Avatar {
     this.bodyDeco = new THREE.Group();
     this.head.add(this.headDeco);
     this.body.add(this.bodyDeco);
+    this.bodyDeco.scale.set(BODY_S[0], BODY_S[1], BODY_S[2]);
+    this.bodyDeco.position.y = BODY_Y;
     this.decoGeos = [];
 
     this.hitbox = new THREE.Mesh(G.hit, HIT_MAT);
@@ -513,7 +521,8 @@ export class Avatar {
 
   makeArm(side) {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.205, 0.53, 0);
+    pivot.position.set(side * 0.205 * BODY_S[0], 0.53 * BODY_S[1] + BODY_Y, 0);
+    pivot.scale.setScalar(0.92);
     this.body.add(pivot);
     const sleeve = this.mesh(G.arm, null, pivot);
     sleeve.position.y = -0.055;
@@ -649,7 +658,7 @@ export class Avatar {
     const lum = new THREE.Color(L.skin).getHSL({}).l;
     this.eyeRim = !!sp && sp !== 'penguin' && lum < 0.45; // 어두운 털이면 눈에 흰 테 (펭귄은 얼굴이 하얗다)
     // 동물은 머리가 옆으로 조금 넓적하다
-    this.head.scale.set(sp ? 1.1 : 1, sp ? 0.97 : 1, sp ? 1.03 : 1);
+    this.head.scale.set((sp ? 1.1 : 1) * HEAD_K, (sp ? 0.97 : 1) * HEAD_K, (sp ? 1.03 : 1) * HEAD_K);
     const paw = sp ? skin : M('#33363B');
     this.footA.material = this.footB.material = paw;
     const acc = M(L.accent);
@@ -1192,7 +1201,7 @@ export class Avatar {
     this.footB.position.set(C.fX, C.fBy, C.fBz);
     // 다리: 옷 밑단 속 엉덩이에서 발까지 잇는다 (걸을 때, 앉을 때 발을 따라간다)
     for (const [leg, foot, sx] of [[this.legA, this.footA, -1], [this.legB, this.footB, 1]]) {
-      _hip.set(sx * 0.085, C.bodyY + 0.24, 0);
+      _hip.set(sx * 0.08, C.bodyY + 0.22, 0);
       _dir.copy(foot.position).sub(_hip);
       const len = _dir.length() || 0.001;
       leg.position.copy(_hip);
@@ -1288,7 +1297,7 @@ export class Avatar {
 
   labelAnchor(v) {
     this.head.getWorldPosition(v);
-    v.y += 0.47;
+    v.y += 0.47 + HEAD_R * (HEAD_K - 1);
     return v;
   }
 

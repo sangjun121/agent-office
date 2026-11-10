@@ -40,8 +40,8 @@ export function faceURL(look) {
     av.update(0.016, { t: 0, moving: 0, st: 0, act: '', emote: '', emoteT: 9 });
     av.root.updateMatrixWorld(true);
     av.head.getWorldPosition(_p);
-    cam.position.set(_p.x + 0.25, _p.y + 0.14, _p.z + 2.15);
-    cam.lookAt(_p.x, _p.y + 0.03, _p.z);
+    cam.position.set(_p.x + 0.3, _p.y + 0.17, _p.z + 2.62); // 머리가 커진 만큼 물러나서 찍는다
+    cam.lookAt(_p.x, _p.y + 0.035, _p.z);
     renderer.render(scene, cam);
     const data = renderer.domElement.toDataURL('image/png');
     scene.remove(av.root);
