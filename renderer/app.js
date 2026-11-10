@@ -6,6 +6,7 @@ import { buildCafe } from '/js/cafe.js';
 import { buildStadium } from '/js/stadium.js';
 import { buildParis } from '/js/paris.js';
 import { buildAirplane } from '/js/airplane.js';
+import { buildBeach } from '/js/beach.js';
 import { Avatar } from '/js/avatar.js';
 import { Grid } from '/js/path.js';
 import { FX } from '/js/fx.js';
@@ -51,7 +52,9 @@ try {
   boot = await api('/api/state');
 } catch {}
 const settings = { bossName: '나', sound: true, hideResting: false, map: 'office', bossLook: null, ...(boot.settings || {}) };
-const MAP_ID = ['cafe', 'stadium', 'paris', 'airplane'].includes(settings.map) ? settings.map : 'office';
+const MAP_ID = ['cafe', 'stadium', 'paris', 'airplane', 'beach'].includes(settings.map) ? settings.map : 'office';
+// 눕는 자리: 빈백과 선베드
+const LIE = (s) => s.kind === 'bean' || s.kind === 'sunbed';
 
 // ---------- 맵 ----------
 const LAYOUTS = {
@@ -112,6 +115,21 @@ const LAYOUTS = {
     lounge: [1, 2, 3, 4, 5, 6, 7, 8].flatMap((r) => ['a', 'b', 'c', 'd'].map((k) => ({ seat: `e${r}${k}` }))),
     boss: 'boss',
     door: { x: 20.7, z: 0.8 },
+  },
+  // 해변: 나는 가운데 선베드에 눕고, 에이전트는 파라솔 테이블과 해변 바에서 일한다. 쉬는 에이전트는 선베드에 눕거나 데크 방석에 앉는다
+  beach: {
+    build: (scene, o) => buildBeach(scene, o),
+    work: [
+      ...['A', 'B', 'C'].flatMap((t) => ['w', 'e', 'n', 's'].map((k) => `t${t}${k}`)),
+      'bar1', 'bar2', 'bar3', 'bar4', 'bar5',
+    ],
+    lounge: [
+      { seat: 'bed5' }, { seat: 'bed4' }, { seat: 'bed3' }, { seat: 'bed2' }, { seat: 'bed1' },
+      { seat: 'deck1' }, { seat: 'deck2' }, { seat: 'deck3' }, { seat: 'deck4' },
+      { x: 4.0, z: 7.3 }, { x: 7.9, z: 7.0 }, { x: 3.2, z: 3.5 }, { x: 6.9, z: 3.45 }, { x: 11.9, z: 6.3 },
+    ],
+    boss: 'boss',
+    door: { x: 14.6, z: 10.9 },
   },
 };
 const LAYOUT = LAYOUTS[MAP_ID];
@@ -341,7 +359,7 @@ const me = {
   jumps: 0,
   twirlT: 9,
   moving: 0,
-  st: BOSS_SEAT.kind === 'bean' ? 2 : 1,
+  st: LIE(BOSS_SEAT) ? 2 : 1,
   seat: BOSS_SEAT,
   act: 'laptop',
   dn: 0,
@@ -360,13 +378,13 @@ function meSit(seat) {
   if (who && who !== 'me') return UI.toast('누가 앉아 있어요', '다른 자리를 찾아봐요.', 1800);
   releaseAll('me');
   used.set(seat.id, 'me');
-  Object.assign(me, { st: seat.kind === 'bean' ? 2 : 1, seat, x: seat.x, z: seat.z, h: seat.h, y: 0, vy: 0 });
+  Object.assign(me, { st: LIE(seat) ? 2 : 1, seat, x: seat.x, z: seat.z, h: seat.h, y: 0, vy: 0 });
   me.act = me.act === 'gun' ? 'gun' : seat.tableY ? 'laptop' : '';
 }
 function meStand() {
   if (!me.st) return;
   const s = me.seat;
-  const d = s.kind === 'chair' ? -0.62 : s.kind === 'bean' ? 0.85 : 0.62;
+  const d = s.kind === 'chair' ? -0.62 : LIE(s) ? 0.85 : 0.62;
   [me.x, me.z] = collide(s.x + Math.sin(s.h) * d, s.z + Math.cos(s.h) * d);
   me.st = 0;
   me.seat = null;
@@ -456,9 +474,9 @@ function nearestAct() {
     const who = used.get(s.id);
     if (who && who !== 'me') continue;
     const d = Math.hypot(s.x - me.x, s.z - me.z);
-    if (d < (s.kind === 'bean' ? 1.0 : 0.85) && d < bd) {
+    if (d < (LIE(s) ? 1.0 : 0.85) && d < bd) {
       bd = d;
-      best = { kind: 'seat', seat: s, label: s.kind === 'bean' ? '빈백에 눕기' : '앉기' };
+      best = { kind: 'seat', seat: s, label: s.kind === 'bean' ? '빈백에 눕기' : s.kind === 'sunbed' ? '선베드에 눕기' : '앉기' };
     }
   }
   for (const a of agents.values()) {
@@ -766,14 +784,14 @@ function removeAgent(a) {
 function standUp(a) {
   if (!a.st) return;
   const s = a.seat;
-  const d = s.kind === 'chair' ? -0.62 : s.kind === 'bean' ? 0.85 : 0.62;
+  const d = s.kind === 'chair' ? -0.62 : LIE(s) ? 0.85 : 0.62;
   a.x = s.x + Math.sin(s.h) * d;
   a.z = s.z + Math.cos(s.h) * d;
   a.st = 0;
   a.seat = null;
 }
 function sitOn(a, seat) {
-  a.st = seat.kind === 'bean' ? 2 : 1;
+  a.st = LIE(seat) ? 2 : 1;
   a.seat = seat;
   a.x = seat.x;
   a.z = seat.z;
@@ -783,7 +801,7 @@ function sitOn(a, seat) {
 }
 function approach(seat) {
   if (seat.kind === 'chair') return { x: seat.x, z: seat.z, h: seat.h };
-  const d = seat.kind === 'bean' ? 0.85 : 0.62;
+  const d = LIE(seat) ? 0.85 : 0.62;
   return { x: seat.x + Math.sin(seat.h) * d, z: seat.z + Math.cos(seat.h) * d, h: seat.h + PI };
 }
 function goTo(a, t, then) {
@@ -1751,7 +1769,7 @@ function setHide(on, save) {
 }
 setHide(!!settings.hideResting, false);
 $('hideBtn').onclick = (e) => (e.stopPropagation(), toggleRest());
-$('mapName').textContent = { office: '작업실', cafe: '카페', stadium: '축구장', paris: '파리', airplane: '비행기' }[MAP_ID];
+$('mapName').textContent = { office: '작업실', cafe: '카페', stadium: '축구장', paris: '파리', airplane: '비행기', beach: '해변' }[MAP_ID];
 if (room.pitch) {
   $('fkBtn').hidden = false;
   $('hint').insertAdjacentHTML('beforeend', ' · <kbd>K</kbd> 프리킥');
@@ -1760,7 +1778,7 @@ $('mapBtn').onclick = () => toggleDoor(undefined, true);
 if (room.sky) document.querySelector('.skeys').insertAdjacentHTML('beforeend', '<br><kbd>E</kbd> 창가 자리에 앉아서 창문 보기');
 // 맵을 바꾸면 화면을 잠깐 어둡게 했다가 새 맵을 연다
 function goMap(id) {
-  if (!['office', 'cafe', 'stadium', 'paris', 'airplane'].includes(id)) return;
+  if (!['office', 'cafe', 'stadium', 'paris', 'airplane', 'beach'].includes(id)) return;
   $('mapFade').hidden = false;
   requestAnimationFrame(() => $('mapFade').classList.add('on'));
   setTimeout(() => api('/api/settings', { map: id }).then(() => location.reload()), 280);

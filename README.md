@@ -37,7 +37,7 @@
 
 ## 1. 설치하기
 
-1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.4.4-arm64.dmg`를 받아요.
+1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.4.5-arm64.dmg`를 받아요.
 2. DMG를 열고 **Agent Office**를 **Applications** 폴더로 끌어다 놓아요.
 3. 처음 열면 "Apple에서 확인할 수 없는 개발자" 경고가 떠요. 아직 Apple 공증을 받지 않은 앱이라서 그래요.
    - **시스템 설정 → 개인정보 보호 및 보안**으로 가서 아래쪽의 **그래도 열기**를 누르면 돼요.
@@ -50,7 +50,7 @@
 받은 파일이 릴리스에 올린 파일과 같은지 확인하고 싶다면, 아래 값을 릴리스의 `SHA256SUMS.txt`와 비교해 보세요.
 
 ```sh
-shasum -a 256 agent-office-0.4.4-arm64.dmg
+shasum -a 256 agent-office-0.4.5-arm64.dmg
 ```
 
 > Intel Mac용 파일은 아직 없어요. 필요하면 [직접 빌드하기](#직접-빌드하기)를 참고하세요.
@@ -184,7 +184,7 @@ shasum -a 256 agent-office-0.4.4-arm64.dmg
 
 ## 9. 맵과 내 캐릭터
 
-맵은 다섯 가지예요. 위쪽 막대의 맵 버튼이나 상단바 메뉴에서 바꾸거나, 문 앞에서 F를 눌러 옮겨 갈 수 있어요.
+맵은 여섯 가지예요. 위쪽 막대의 맵 버튼이나 상단바 메뉴에서 바꾸거나, 문 앞에서 F를 눌러 옮겨 갈 수 있어요.
 
 <table>
   <tr>
@@ -201,6 +201,13 @@ shasum -a 256 agent-office-0.4.4-arm64.dmg
   <tr>
     <td width="50%" valign="top"><img src="docs/airplane.jpg" alt="비행기 맵"><br><b>비행기</b><br>하얀 벽에 타원 창문이 줄지어 있는 기내예요. 나는 일등석 창가에 앉고, 에이전트는 일반석 접이식 테이블에서 일해요. 쉬는 에이전트도 일반석 자기 자리에 앉아서 쉬어요. 오늘의 작업 현황은 앞 칸막이의 화면에 뜨고, 밖에는 구름이 뒤로 흘러가요.</td>
     <td width="50%" valign="top"><img src="docs/airplane-window.jpg" alt="비행기 창문으로 내다본 모습"><br><b>창문 보기</b><br>창가 자리에 앉아 <b>창문 보기</b>를 누르거나 E를 누르면 그 창으로 밖을 내다봐요. 날개와 엔진, 흘러가는 구름이 보이고, 하늘색은 지금 시각에 따라 바뀌어요. Esc를 누르거나 움직이면 돌아와요.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/beach.jpg" alt="해변 맵"><br><b>해변</b><br>파도가 밀려오는 바다 앞 모래밭이에요. 나는 파라솔 옆 선베드에 누워서 시작하고, 에이전트는 파라솔 테이블과 해변 바에서 일해요. 쉬는 에이전트는 선베드에 눕거나 나무 데크 방석에 앉아요. 오늘의 작업 현황은 해변 바 뒤판에 걸려 있어요. 빈 선베드에 가까이 가서 F를 누르면 누울 수 있어요.</td>
+    <td width="50%" valign="top"></td>
   </tr>
 </table>
 
@@ -353,7 +360,7 @@ sources.js   Claude Code, Codex 세션 기록 읽기
 staff.js     충성도와 직급
 appicons.js  이 Mac에 깔린 Orca, Claude, Codex 아이콘 읽기
 renderer/    앱 화면 (3D 작업실, 처음 설정, 라디오 음악)
-shared/      맵(작업실, 카페, 축구장, 파리, 비행기)과 캐릭터 (three.js)
+shared/      맵(작업실, 카페, 축구장, 파리, 비행기, 해변)과 캐릭터 (three.js)
 scripts/     아이콘, README 그림, 홍보 영상, 빌드 도우미, 업데이트 서명
 ```
 

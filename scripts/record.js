@@ -535,6 +535,14 @@ async function stills(srv) {
   await still('airplane-window.jpg', CROP);
   await key('Escape');
   await sleep(500);
+  // 해변 맵 (나는 선베드에 누워 있다)
+  await inApp("__ao.goMap('beach')");
+  await sleep(1500);
+  await until(() => inApp("!!(window.__ao && __ao.agents.size >= 7 && document.getElementById('loading').classList.contains('done'))"), 20000);
+  await sleep(2500);
+  await inApp("document.getElementById('inboxHide').click()");
+  await sleep(600);
+  await still('beach.jpg', CROP);
   // 12) 처음 설정: 시작, 앱 연결 (600x720 창을 2배로)
   const sw = new BrowserWindow({ width: 1200, height: 1440, show: false, webPreferences: { offscreen: true, backgroundThrottling: false } });
   await sw.loadURL(`${srv.setupUrl}&step=2`);

@@ -31,7 +31,7 @@ const DEFAULTS = {
 };
 // 업데이트 안내: 쓰던 사람에게 새 버전에서 바뀐 것을 한 번만 알려 준다. 안내할 내용이 바뀌면 이 값을 바꾼다
 const NEWS_ID = 'tag-detail';
-const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris', 'airplane']);
+const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris', 'airplane', 'beach']);
 
 const RADIO_STATIONS = new Set(['lofi', 'piano', 'rain', 'focus', 'cabin']);
 

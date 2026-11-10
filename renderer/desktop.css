@@ -715,6 +715,8 @@ body.mini #newsPanel { top: 58px; left: 10px; right: 10px; width: auto; }
 .switch input:focus-visible + i { outline: 3px solid rgba(255, 138, 61, .6); outline-offset: 2px; }
 
 /* ---------- 비행기 맵 ---------- */
+#doorPanel .mart.beach { background: linear-gradient(180deg, #2FA7C9 0 22%, #5CCBDD 22% 40%, #FFFFFF 40% 44%, #F3E0B5 44%); }
+#doorPanel .mart.beach::after { content: ''; position: absolute; left: 58%; top: 12px; width: 26px; height: 13px; border-radius: 26px 26px 0 0; background: #E5484D; box-shadow: inset 9px 0 0 #FFFDF6, inset -9px 0 0 #FFFDF6; }
 #doorPanel .mart.plane { background: linear-gradient(180deg, #EEF1F5 0 42%, #2B3A7A 42% 56%, #C5CEE0 56%); }
 #doorPanel .mart.plane::after { content: ''; position: absolute; left: 12%; top: 5px; width: 8px; height: 11px; border-radius: 50%; background: #7CC4F2; box-shadow: 0 0 0 2px #fff, 22px 0 0 #7CC4F2, 22px 0 0 2px #fff, 44px 0 0 #7CC4F2, 44px 0 0 2px #fff, 66px 0 0 #7CC4F2, 66px 0 0 2px #fff; }
 /* 창문 보기 버튼: 창가 자리에 앉으면 행동 버튼 옆에 뜬다 */

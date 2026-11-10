@@ -86,6 +86,7 @@ function showMenu() {
           ['stadium', '축구장'],
           ['paris', '파리'],
           ['airplane', '비행기'],
+          ['beach', '해변'],
         ].map(([id, label]) => ({ label, type: 'radio', checked: srv?.getSettings().map === id, click: () => srv?.setSettings({ map: id }) })),
       },
       {
