@@ -26,7 +26,11 @@ const DEFAULTS = {
   agentNames: {}, // 내가 붙인 에이전트 이름: id → 이름 (비우면 원래 작업 이름)
   readMarks: {}, // 읽은 보고의 짧은 지문 (내용은 저장하지 않는다): 다시 켜도 안 읽음으로 돌아오지 않게
   pinPopover: false, // 작은 창을 고정해서 다른 곳을 눌러도 안 닫히게
+  tagDetail: false, // 이름표에 직급과 하는 일을 늘 보이기 (끄면 이름과 상태 점만)
+  newsSeen: '', // 마지막으로 본 업데이트 안내 (NEWS_ID와 다르면 앱을 열 때 한 번 띄운다)
 };
+// 업데이트 안내: 쓰던 사람에게 새 버전에서 바뀐 것을 한 번만 알려 준다. 안내할 내용이 바뀌면 이 값을 바꾼다
+const NEWS_ID = 'tag-detail';
 const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris']);
 
 const RADIO_STATIONS = new Set(['lofi', 'piano', 'rain', 'focus']);
@@ -59,7 +63,8 @@ function loadSettings(file) {
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
     return { ...DEFAULTS, ...s, sources: { ...DEFAULTS.sources, ...(s.sources || {}) } };
   } catch {
-    return JSON.parse(JSON.stringify(DEFAULTS));
+    // 처음 설치한 사람은 바뀌기 전 화면을 모르니 업데이트 안내를 띄우지 않는다
+    return { ...JSON.parse(JSON.stringify(DEFAULTS)), newsSeen: NEWS_ID };
   }
 }
 
@@ -210,7 +215,8 @@ function startServer({
   }
   function applySettings(body = {}) {
     if (typeof body.bossName === 'string') settings.bossName = body.bossName.trim().slice(0, 16) || '나';
-    for (const k of ['notify', 'sound', 'hideResting', 'miniInbox', 'pinPopover']) if (typeof body[k] === 'boolean') settings[k] = body[k];
+    for (const k of ['notify', 'sound', 'hideResting', 'miniInbox', 'pinPopover', 'tagDetail']) if (typeof body[k] === 'boolean') settings[k] = body[k];
+    if (body.newsSeen === true) settings.newsSeen = NEWS_ID;
     if (MAPS_OK.has(body.map)) settings.map = body.map;
     if (body.bossLook && typeof body.bossLook === 'object') {
       const look = {};
@@ -258,6 +264,8 @@ function startServer({
             hideResting: settings.hideResting,
             miniInbox: settings.miniInbox,
             pinPopover: settings.pinPopover,
+            tagDetail: settings.tagDetail,
+            news: !!settings.setupDone && settings.newsSeen !== NEWS_ID, // 업데이트 안내를 아직 안 봤다
             sentHome: settings.sentHome,
             agentNames: settings.agentNames,
           },
@@ -437,7 +445,7 @@ function startServer({
   });
 }
 
-module.exports = { startServer };
+module.exports = { startServer, NEWS_ID };
 
 // `node server.js`: 브라우저로 보기 (알림은 macOS 알림 센터로)
 if (require.main === module) {

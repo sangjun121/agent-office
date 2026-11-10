@@ -192,9 +192,11 @@ function createWatcher({ interval = 2000, onReport, onUnread, onWork, onAnswered
           onAnswered?.(a, Date.now() - (p.stateStartedAt || Date.now()));
           let changed = false;
           for (const r of state.reports)
-            if (r.agentId === a.id && r.kind === 'attention' && !r.read) {
+            if (r.agentId === a.id && r.kind === 'attention' && !r.seen) {
+              // 답을 받아 다시 일하기 시작한 허락 요청은 더 기다리는 일이 아니다 → 확인한 보고로 보낸다
               r.read = true;
-              remember(r.fp, 'r');
+              r.seen = true;
+              remember(r.fp, 's');
               changed = true;
             }
           if (changed) {

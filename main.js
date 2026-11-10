@@ -19,7 +19,7 @@ let lastUnread = 0;
 let popPinned = false; // 고정하면 다른 곳을 눌러도 작은 창이 안 닫힌다
 let pinPos = null; // 고정한 채 끌어서 옮겨 둔 자리
 const POP_W = 440;
-const POP_H = { open: 640, shut: 396 }; // 작은 창 높이: 보고함을 펼쳤을 때 / 접었을 때
+const POP_H = { open: 640, shut: 396 }; // 작은 창 높이: 보고함을 펼쳤을 때(장면은 위쪽 띠) / 접었을 때(방을 크게)
 // 상단바 아이콘의 고유 값. ⌘ 키로 끌어 옮긴 아이콘 자리를 macOS가 다음 실행에도 기억한다
 const TRAY_GUID = '6c1f7f0e-3b9d-4a57-9e43-6d8a2f5b1c90';
 
@@ -90,6 +90,12 @@ function showMenu() {
         type: 'checkbox',
         checked: !!srv?.getSettings().hideResting,
         click: (i) => srv?.setSettings({ hideResting: i.checked }),
+      },
+      {
+        label: '이름표에 직급과 하는 일 보이기',
+        type: 'checkbox',
+        checked: !!srv?.getSettings().tagDetail,
+        click: (i) => srv?.setSettings({ tagDetail: i.checked }),
       },
       { label: '작은 창 고정하기', type: 'checkbox', checked: popPinned, click: (i) => srv?.setSettings({ pinPopover: i.checked }) },
       { type: 'separator' },

@@ -14,6 +14,7 @@ import { $, clamp, damp, angleDamp, esc, hashStr, fmtTime } from '/js/util.js';
 import { setBrand, OFFICE_BRAND } from '/js/brand.js';
 import * as UI from '/js/ui.js';
 import { openEditor } from '/js/editor.js';
+import { faceURL } from '/js/face.js';
 
 // 동아리 흔적 없는 작업실로
 setBrand(OFFICE_BRAND);
@@ -111,6 +112,15 @@ const viewBox = () => {
   return { x: r.left, y: r.top, w: Math.max(1, r.width), h: Math.max(1, r.height) };
 };
 let VB = viewBox();
+// 창 크기나 작은 창의 배치가 바뀌면 장면을 그 상자에 다시 맞춘다
+let sceneReady = false;
+function fitScene() {
+  if (!sceneReady) return;
+  VB = viewBox();
+  renderer.setSize(VB.w, VB.h);
+  camera.aspect = VB.w / VB.h;
+  camera.updateProjectionMatrix();
+}
 
 // ---------- 장면 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -162,13 +172,18 @@ const DOOR = LAYOUT.door;
 // ---------- 이름표 ----------
 const _v = new THREE.Vector3();
 const _a = new THREE.Vector3();
+let hoverId = null; // 마우스를 올린 에이전트 (이름표에 하는 일을 펼친다)
+// 이름표는 머리줄 아래에서 서서히 나타난다 (작은 창은 머리줄이 낮다)
+const FADE0 = MINI ? 30 : 60;
+const FADE1 = MINI ? 54 : 100;
+// 이름표 한 알약: 상태 점(색은 CSS의 data-s) + 이름 + 허락이 필요할 때만 붙는 글. 하는 일(sub)은 마우스를 올렸을 때 펼친다
 function makeLabel(kind) {
   const el = document.createElement('div');
   el.className = 'lbl';
-  el.innerHTML = `<div class="bub" hidden></div><div class="tag ${kind}"><span class="ico"></span><span class="rk"></span><span class="nm"></span></div><div class="sub"></div>`;
+  el.innerHTML = `<div class="bub" hidden></div><div class="tag ${kind}"><span class="ico"></span><span class="rk"></span><span class="nm"></span><span class="st"></span></div><div class="sub"></div>`;
   $('labels').appendChild(el);
   if (kind === 'boss') el.querySelector('.rk').textContent = '사장님';
-  return { el, tag: el.querySelector('.tag'), bub: el.querySelector('.bub'), ico: el.querySelector('.ico'), rk: el.querySelector('.rk'), nm: el.querySelector('.nm'), sub: el.querySelector('.sub'), vis: null, bubUntil: 0 };
+  return { el, tag: el.querySelector('.tag'), bub: el.querySelector('.bub'), ico: el.querySelector('.ico'), rk: el.querySelector('.rk'), nm: el.querySelector('.nm'), st: el.querySelector('.st'), sub: el.querySelector('.sub'), vis: null, bubUntil: 0 };
 }
 function place(lbl, x, y, z) {
   _v.set(x, y, z).project(camera);
@@ -182,8 +197,8 @@ function place(lbl, x, y, z) {
       lbl.el.style.transform = tf;
     }
   }
-  // 머리줄 아래에서 서서히 나타나게 (이름표 아래 끝이 위쪽 100px 안이면 흐리게)
-  const op = sy < 100 ? Math.max(0, Math.min(1, (sy - 60) / 40)) : 1;
+  // 머리줄 아래에서 서서히 나타나게 (이름표 아래 끝이 머리줄 안이면 흐리게)
+  const op = sy < FADE1 ? Math.max(0, Math.min(1, (sy - FADE0) / (FADE1 - FADE0))) : 1;
   if (lbl.op !== op) {
     lbl.op = op;
     lbl.el.style.opacity = op;
@@ -377,7 +392,7 @@ function toggleDance() {
   while (dn === me.dn) dn = Math.floor(Math.random() * DANCES.length);
   me.dn = dn;
   me.act = 'dance';
-  UI.toast(`💃 ${DANCES[dn]}`, '3을 다시 누르거나 움직이면 멈춰요.', 1800);
+  UI.toast(DANCES[dn], '3을 다시 누르거나 움직이면 멈춰요.', 1800);
 }
 function firecracker() {
   fx.burst(me.x, me.y + 1.45, me.z);
@@ -389,7 +404,7 @@ function toggleGun() {
     UI.toast('종이 총을 넣었어요', '', 1300);
   } else {
     me.act = 'gun';
-    UI.toast('🔫 종이 총을 꺼냈어요', MINI ? '클릭이나 F로 발사! G로 넣어요.' : '클릭이나 F로 발사! 에이전트를 맞혀 봐요. G로 넣어요.', 2200);
+    UI.toast('종이 총을 꺼냈어요', MINI ? '클릭이나 F로 발사! G로 넣어요.' : '클릭이나 F로 발사! 에이전트를 맞혀 봐요. G로 넣어요.', 2200);
   }
 }
 function fire() {
@@ -800,7 +815,7 @@ function sendHome(a, quiet) {
   homeNow[a.id] = since;
   api('/api/send-home', { id: a.id, since });
   leave(a);
-  if (!quiet) UI.toast(`🏠 ${nameOf(a.data)}`, '오늘은 퇴근했어요. 새 일을 받으면 다시 출근해요.', 2400);
+  if (!quiet) UI.toast(nameOf(a.data), '오늘은 퇴근했어요. 새 일을 받으면 다시 출근해요.', 2400);
 }
 function toLounge(a, instant) {
   if (settings.hideResting || wentHome(a.data)) return leave(a, instant);
@@ -971,8 +986,8 @@ function startReport(a, r) {
   a.role = 'report';
   a.report = r;
   a.tries = 0;
-  // 작은 창에서는 이름표와 보고함 줄이 알려 주니 알림 쪽지를 띄우지 않는다 (위쪽이 겹치지 않게)
-  if (!MINI) UI.toast(`${r.kind === 'interrupted' ? '⏸' : '✅'} ${nickOf(r.agentId) || r.name}`, '보고하러 가는 중이에요', 2600);
+  // 말풍선과 보고함 줄이 알려 주니, 보고함을 접어 둔 큰 창에서만 알림 쪽지를 띄운다 (같은 보고가 여러 군데 겹치지 않게)
+  if (!MINI && inboxShut()) UI.toast(nickOf(r.agentId) || r.name, r.kind === 'interrupted' ? '중단됐어요. 보고하러 가는 중이에요' : '보고하러 가는 중이에요', 2600);
   walkToMe(a);
 }
 
@@ -984,24 +999,43 @@ const TOOL_KO = {
   apply_patch: '코드 고치는 중', shell: '터미널 쓰는 중', exec_command: '터미널 쓰는 중',
 };
 function statusText(d, role) {
-  if (role === 'report') return '📣 보고하러 가는 중';
-  if (role === 'leave') return '👋 퇴근하는 중';
+  if (role === 'report') return '보고하러 가는 중';
+  if (role === 'leave') return '퇴근하는 중';
   switch (d.state) {
     case 'working':
-      return d.tool ? `💻 ${TOOL_KO[d.tool] || `${d.tool} 쓰는 중`}` : '💭 생각하는 중';
+      return d.tool ? TOOL_KO[d.tool] || `${d.tool} 쓰는 중` : '생각하는 중';
     case 'monitoring':
-      return '👀 지켜보는 중';
+      return '지켜보는 중';
     case 'waiting':
-      return '❗ 답을 기다려요';
+      return '답을 기다려요';
     case 'blocked':
-      return '❗ 허락이 필요해요';
+      return '허락이 필요해요';
     case 'done':
-      return d.interrupted ? '⏸ 중단됐어요' : '💤 쉬는 중';
+      return d.interrupted ? '중단됐어요' : '쉬는 중';
     case 'idle':
-      return '💤 쉬는 중';
+      return '쉬는 중';
     default:
       return '';
   }
+}
+// 상태 글 앞에 붙는 아이콘 (index.html의 선 아이콘)
+function statusIco(d, role) {
+  if (role === 'report') return 'report';
+  if (role === 'leave') return 'home';
+  if (d.state === 'working') return d.tool ? 'work' : 'think';
+  if (d.state === 'monitoring') return 'eye';
+  if (ATTN.has(d.state)) return 'attn';
+  return d.state === 'done' && d.interrupted ? 'pause' : 'rest';
+}
+// 이름표의 상태: 일하는 중(work), 나를 기다림(attn), 보고하러 옴(report), 쉼(rest), 중단(stop), 퇴근(leave)
+const labelState = (a) =>
+  a.role === 'report' ? 'report' : a.role === 'leave' ? 'leave' : ATTN.has(a.data.state) ? 'attn' : ACTIVE.has(a.data.state) ? 'work' : a.data.interrupted ? 'stop' : 'rest';
+// 이름표를 잠깐 반짝인다 (상태 묶음에서 골랐을 때, 허락 요청이 왔을 때)
+function pingLabel(a) {
+  const el = a.lbl.el;
+  el.classList.remove('ping');
+  void el.offsetWidth;
+  el.classList.add('ping');
 }
 const short = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s));
 const typeLabel = (t) => ({ claude: 'Claude', codex: 'Codex', gemini: 'Gemini' })[t] || t || '에이전트';
@@ -1032,6 +1066,8 @@ function applySettings(s) {
   if (typeof s.hideResting === 'boolean' && s.hideResting !== settings.hideResting && Date.now() - hideTouched > 3000) setHide(s.hideResting, false);
   if (typeof s.pinPopover === 'boolean' && s.pinPopover !== pinned && Date.now() - pinTouched > 3000) setPin(s.pinPopover, false);
   if (MINI && typeof s.miniInbox === 'boolean' && s.miniInbox !== miniInboxOpen && Date.now() - miniInboxTouched > 3000) setMiniInbox(s.miniInbox, false);
+  if (Date.now() - tagTouched > 3000) setTagDetail(!!s.tagDetail, false); // 이름표에 직급과 하는 일을 늘 보이기
+  showNews(!!s.news && !setupOpen);
   Object.assign(settings, s);
 }
 
@@ -1063,7 +1099,9 @@ function sync(st) {
     performed.add(r.id);
     if (first || r.read) continue;
     if (r.kind === 'attention') {
-      if (!MINI) UI.toast(`❗ ${nickOf(r.agentId) || r.name}`, '권한이 필요해요. 자리에서 손을 들고 있어요.', 3500);
+      if (!MINI && inboxShut()) UI.toast(nickOf(r.agentId) || r.name, '허락이 필요해요. 자리에서 손을 들고 있어요.', 3500);
+      const w = agents.get(r.agentId);
+      if (w) pingLabel(w);
       chime(true);
       continue;
     }
@@ -1110,84 +1148,163 @@ function renderHud(st) {
   const work = ags.filter((d) => ACTIVE.has(d.state)).length;
   const attn = ags.filter((d) => ATTN.has(d.state)).length;
   const done = (st.reports || []).filter((r) => r.kind !== 'attention' && r.at >= startOfToday()).length;
-  for (const [id, n] of [['cWork', work], ['cAttn', attn], ['cDone', done], ['mWork', work], ['mAttn', attn], ['mDone', done]]) {
+  for (const [id, n] of [['cAttn', attn], ['cWork', work], ['cDone', done]]) {
     $(id).querySelector('b').textContent = n;
     $(id).classList.toggle('zero', !n);
   }
+  // 작은 창: 장면 아래 한 줄 요약
+  if (MINI) {
+    const rest = restingNow().filter((d) => !wentHome(d) && !settings.hideResting).length;
+    const sum = `${work}|${done}|${rest}`;
+    if (sum !== miniSumSig) {
+      miniSumSig = sum;
+      $('miniSum').innerHTML = `<span>일하는 중 <b>${work}</b></span><span>오늘 끝남 <b>${done}</b></span><span>쉬는 중 <b>${rest}</b></span>`;
+    }
+  }
+  // 연동: 평소에는 아이콘만, 볼 수 있는 앱이 없을 때만 글자로 알린다
   const conn = $('conn');
   const src = st.sources || {};
   const names = [src.orca && 'Orca', src.claude && 'Claude', src.codex && 'Codex'].filter(Boolean);
-  conn.querySelector('.ct').textContent = names.length ? names.join(' · ') : '볼 수 있는 앱이 없어요';
+  conn.querySelector('.ct').textContent = names.length ? '' : '볼 수 있는 앱이 없어요';
   conn.title = `${names.length ? `보는 중: ${names.join(', ')}` : '볼 수 있는 앱이 없어요'}${st.error ? `\nOrca: ${st.error}` : ''}\n누르면 연동 설정이 열려요`;
   conn.classList.toggle('off', !names.length);
   const u = st.unread || 0;
   $('unreadCnt').textContent = u || '';
   $('unreadCnt2').textContent = u || '';
-  // 보고함을 접어 둔 작은 창: 새 보고가 오면 접힌 줄을 한 번 반짝인다
-  if (MINI && !miniInboxOpen && u > unreadSeen) {
-    const el = $('inbox');
-    el.classList.remove('ping');
-    void el.offsetWidth;
-    el.classList.add('ping');
-  }
+  if (MINI) autoMiniInbox(st, u);
   unreadSeen = u;
   document.title = u ? `(${u}) 에이전트 작업실` : '에이전트 작업실';
 }
+let miniSumSig = '';
+// 작은 창: 열어 볼 보고가 있으면 보고함을 펼쳐서 띄우고, 새 보고가 오면 펼친다.
+// 확인할 보고가 하나도 안 남으면 접어서 방을 크게 보여 준다
+let miniPending = -1;
+function autoMiniInbox(st, u) {
+  const reports = st.reports || [];
+  const byId = agentsById();
+  const pending = reports.filter((r) => !r.seen).length;
+  if (miniPending < 0) {
+    const want = u > 0 || reports.some((r) => !r.seen && waitingNow(r, byId));
+    if (want !== miniInboxOpen) setMiniInbox(want, true);
+  } else if (u > unreadSeen && !miniInboxOpen) setMiniInbox(true, true);
+  else if (!pending && miniPending > 0 && miniInboxOpen) setMiniInbox(false, true);
+  miniPending = pending;
+}
 
-let inboxFilter = 'all';
+// 위쪽 상태 묶음을 누르면: 그 에이전트로 카메라를 잠깐 옮기고 이름표를 반짝인다 (누를 때마다 다음 에이전트)
+let focusNo = 0;
+function focusNext(states, none) {
+  const list = [...agents.values()].filter((a) => states.has(a.data.state) && a.role !== 'leave');
+  if (!list.length) {
+    UI.toast(none, '', 1800);
+    return null;
+  }
+  const a = list[focusNo++ % list.length];
+  cam.focus = { id: a.id, t: 3.2 };
+  pingLabel(a);
+  return a;
+}
+// 보고함을 열고 그 구역으로 내려간다 ('attn': 나를 기다려요, 'new': 새 보고)
+function showReports(sec) {
+  setInbox(true);
+  if (inboxView !== 'reports') setInboxView('reports');
+  const li = $('inboxList').querySelector(`.sec[data-sec="${sec}"]`);
+  $('inboxList').scrollTop = li ? Math.max(0, li.offsetTop - $('inboxList').offsetTop) : 0;
+}
+$('cAttn').onclick = () => {
+  if (focusNext(ATTN, '지금 나를 기다리는 에이전트가 없어요')) showReports('attn');
+};
+$('cWork').onclick = () => focusNext(ACTIVE, '지금 일하는 에이전트가 없어요');
+$('cDone').onclick = () => showReports('new');
+
+// 보고함은 구역으로 나눈다: 나를 기다려요(허락이나 답을 기다리는 에이전트) → 새 보고 → 확인한 보고(맨 아래 한 줄로 접혀 있다)
+let inboxView = 'reports'; // 'reports' 보고함 | 'seen' 확인한 보고 | 'staff' 직원 명부
 let inboxSig = '';
-// 접힌 보고함 줄에 보여 줄 한 줄: 안 읽은 보고가 있으면 그것, 없으면 가장 최근 보고
+const agentsById = () => new Map((lastState.agents || []).map((d) => [d.id, d]));
+// 아직 답을 기다리는 허락 요청인지 (에이전트가 이미 다시 일하면 지난 요청이다)
+const waitingNow = (r, byId) => r.kind === 'attention' && ATTN.has(byId.get(r.agentId)?.state);
+// 캐릭터 얼굴 동그라미: 방 안의 그 캐릭터와 같은 모습 (작업실에 없는 에이전트도 같은 얼굴이 나온다)
+const lookOf = (id) => agents.get(id)?.av.look || lookFor(String(id));
+function faceStyle(look) {
+  const u = faceURL(look);
+  return `--c:${esc(look.cloth)}${u ? `;background-image:url(${u})` : ''}`;
+}
+const faceHtml = (id, cls, badge = '') => `<span class="${cls} face" style="${faceStyle(lookOf(id))}">${badge}</span>`;
+function setFace(el, look) {
+  el.classList.add('face');
+  el.setAttribute('style', faceStyle(look));
+}
+// 접힌 보고함 줄에 보여 줄 한 줄: 나를 기다리는 보고, 없으면 안 열어 본 보고, 그것도 없으면 가장 최근 보고
 function renderPeek() {
   const all = lastState.reports || [];
-  const r = all.find((x) => !x.read && !x.seen) || all.find((x) => !x.seen);
-  const t = r ? `${kindIco(r.kind)}${esc(nickOf(r.agentId) || r.name)} · ${ago(r.at)}` : all.length ? '새 보고가 없어요' : '아직 받은 보고가 없어요';
-  if ($('inboxPeek').innerHTML !== t) $('inboxPeek').innerHTML = t;
+  const byId = agentsById();
+  const w = all.find((x) => !x.seen && waitingNow(x, byId));
+  const r = w || all.find((x) => !x.read && !x.seen) || all.find((x) => !x.seen);
+  const t = r
+    ? `${kindIco(w ? 'attention' : r.kind === 'attention' ? 'interrupted' : r.kind)}${esc(nickOf(r.agentId) || r.name)} · ${w ? '허락을 기다려요' : ago(r.at)}`
+    : all.length
+      ? '새 보고가 없어요'
+      : '아직 받은 보고가 없어요';
+  if (peekSig !== t) {
+    peekSig = t;
+    $('inboxPeek').innerHTML = t;
+  }
+}
+let peekSig = '';
+// 보고 한 줄. wait: 지금 나를 기다리는 보고면 줄 안에 '앱에서 답하기' 버튼을 넣는다
+function inboxRow(r, wait) {
+  const nick = nickOf(r.agentId);
+  const where = [nick ? r.name : '', r.app, r.repo].filter(Boolean).join(' · '); // 이름을 붙였으면 작업 이름은 아래 줄로
+  const k = wait ? 'attention' : r.kind === 'attention' ? 'interrupted' : kc(r.kind);
+  const chip = wait || k === 'done' ? '' : r.kind === 'attention' ? '지난 요청' : KIND_KO[k];
+  const text = r.kind === 'attention' ? clean(r.message) || '허락이나 답을 기다려요' : clean(r.message) || (r.kind === 'interrupted' ? '중간에 멈췄어요' : '남긴 답이 없어요');
+  const acts = wait
+    ? `<div class="iacts">${
+        r.app && !r.demo ? `<button type="button" class="igo" data-act="app" title="${esc(r.app)}${r.canSession ? '의 그 대화를' : '을(를)'} 열어요">${esc(r.app)}에서 답하기${ico('out')}</button>` : ''
+      }<button type="button" class="igh" data-act="open">대화 보기</button></div>`
+    : '';
+  const side = r.seen
+    ? `<button type="button" class="iact" data-act="unsee" title="보고함으로 되돌려요" aria-label="보고함으로 되돌리기">${ico('undo')}</button>`
+    : wait
+      ? ''
+      : `<button type="button" class="iact" data-act="seen" title="확인한 보고로 보내요" aria-label="확인">${ico('check')}</button>`;
+  return `<li class="k-${k}${wait ? ' wait' : ''}${r.read ? '' : ' unread'}${r.id === openReportId ? ' on' : ''}" data-id="${esc(r.id)}">${faceHtml(r.agentId, 'iav', kindIco(k))}<div class="itx"><div class="itop"><b>${esc(nick || r.name)}</b><time>${esc(ago(r.at))}</time></div><small>${
+    chip ? `<em class="kchip k-${k}">${chip}</em>` : ''
+  }${esc(where)}</small><p>${esc(text)}</p>${acts}</div>${side}</li>`;
 }
 function renderInbox() {
   if (MINI) renderPeek();
+  if (inboxView === 'staff') return;
   const all = lastState.reports || [];
-  const FILTERS = {
-    all: (r) => !r.seen,
-    unread: (r) => !r.seen && !r.read,
-    attention: (r) => !r.seen && r.kind === 'attention',
-    seen: (r) => r.seen,
-  };
-  const list = all.filter(FILTERS[inboxFilter] || FILTERS.all);
-  const sig = JSON.stringify([inboxFilter, openReportId, list.map((r) => [r.id, r.read, nickOf(r.agentId)]), Math.floor(Date.now() / 60000)]);
+  const byId = agentsById();
+  const open = all.filter((r) => !r.seen);
+  const wait = open.filter((r) => waitingNow(r, byId));
+  const fresh = open.filter((r) => !waitingNow(r, byId));
+  const seen = all.filter((r) => r.seen);
+  const list = inboxView === 'seen' ? seen : open;
+  const sig = JSON.stringify([inboxView, openReportId, list.map((r) => [r.id, r.read, nickOf(r.agentId), waitingNow(r, byId)]), seen.length, Math.floor(Date.now() / 60000)]);
   if (sig === inboxSig) return;
   inboxSig = sig;
-  if (!list.length) {
-    const empty =
-      inboxFilter === 'seen'
-        ? '봤어요 처리한 보고가 여기 모여요.'
-        : inboxFilter !== 'all'
-          ? '여기는 비어 있어요.'
-          : all.length
-            ? '다 봤어요 👏<br>본 보고는 \'본 것\' 탭에 있어요.'
-            : '에이전트가 일을 끝낼 때마다<br>여기에 보고가 쌓여요.<br><button type="button" class="btn ghost sm" data-demo>연습 보고 받아 보기</button>';
-    $('inboxList').innerHTML = `<li class="empty">${empty}</li>`;
-    return;
+  $('readAll').hidden = inboxView !== 'reports' || !fresh.length;
+  let html = '';
+  if (inboxView === 'seen') html = seen.length ? seen.map((r) => inboxRow(r, false)).join('') : '<li class="empty">확인한 보고가 여기 모여요.</li>';
+  else {
+    if (wait.length) html += `<li class="sec a" data-sec="attn">나를 기다려요 <b>${wait.length}</b></li>${wait.map((r) => inboxRow(r, true)).join('')}`;
+    if (fresh.length) html += `<li class="sec" data-sec="new">새 보고 <b>${fresh.length}</b></li>${fresh.map((r) => inboxRow(r, false)).join('')}`;
+    if (!open.length)
+      html += `<li class="empty">${
+        all.length ? '모두 확인했어요.' : '에이전트가 일을 끝낼 때마다<br>여기에 보고가 쌓여요.<br><button type="button" class="btn ghost sm" data-demo>연습 보고 받아 보기</button>'
+      }</li>`;
+    if (seen.length) html += `<li class="more"><button type="button" data-view="seen">확인한 보고 ${seen.length}개 보기</button></li>`;
   }
-  $('inboxList').innerHTML = list
-    .map((r) => {
-      const where = [r.app, r.repo].filter(Boolean).join(' · ');
-      const text = r.kind === 'attention' ? clean(r.message) || '허락이나 답을 기다려요' : clean(r.message) || (r.kind === 'interrupted' ? '중간에 멈췄어요' : '남긴 답이 없어요');
-      const act = r.seen
-        ? `<button type="button" class="iact" data-act="unsee" title="보고함 목록으로 되돌려요">${ico('undo')}되돌리기</button>`
-        : `<button type="button" class="iact" data-act="seen" title="목록에서 빼요. '본 것' 탭에서 다시 볼 수 있어요.">${ico('check')}봤어요</button>`;
-      const nick = nickOf(r.agentId);
-      const at = [nick ? r.name : '', where].filter(Boolean).join(' · '); // 이름을 붙였으면 작업 이름은 아래 줄로
-      const k = kc(r.kind);
-      return `<li class="k-${k}${r.read ? '' : ' unread'}${r.id === openReportId ? ' on' : ''}" data-id="${esc(r.id)}"><span class="iav" style="--c:${esc(agentColor(r.agentId))}">${kindIco(k)}</span><div class="itx"><div class="itop"><b>${esc(nick || r.name)}</b><time>${esc(ago(r.at))}</time></div><small><em class="kchip k-${k}">${KIND_KO[k] || ''}</em>${esc(at)}</small><p>${esc(text)}</p></div>${act}</li>`;
-    })
-    .join('');
+  $('inboxList').innerHTML = html;
 }
 
 let statusSig = '';
 function drawStatus(st) {
   const ags = st.agents || [];
   const info = {
-    work: ags.filter((d) => ACTIVE.has(d.state)).map((d) => ({ name: nameOf(d), sub: [d.app, statusText(d).replace(/^\S+\s/, '')].filter(Boolean).join(' · ') })),
+    work: ags.filter((d) => ACTIVE.has(d.state)).map((d) => ({ name: nameOf(d), sub: [d.app, statusText(d)].filter(Boolean).join(' · ') })),
     attn: ags.filter((d) => ATTN.has(d.state)).map((d) => ({ name: nameOf(d), sub: d.state === 'blocked' ? '허락이 필요해요' : '답을 기다려요' })),
     done: (st.reports || [])
       .filter((r) => r.kind !== 'attention' && r.at >= startOfToday())
@@ -1216,9 +1333,9 @@ function drawStatus(st) {
   g.font = `32px ${FONT_HAND}`;
   g.fillText(`${fmtTime(Date.now())} 기준`, w - 56, 100);
   [
-    ['🛠 일하는 중', info.work, '#3D6FD8'],
-    ['❗ 확인 필요', info.attn, '#E5484D'],
-    ['✅ 오늘 끝남', info.done, '#2E8B57'],
+    ['일하는 중', info.work, '#3D6FD8'],
+    ['나를 기다려요', info.attn, '#E5484D'],
+    ['오늘 끝남', info.done, '#2E8B57'],
   ].forEach(([title, list, color], i) => {
     const x = 56 + i * 400;
     g.textAlign = 'left';
@@ -1253,9 +1370,7 @@ let cvReply = '';
 const KIND_KO = { done: '완료', attention: '허락 필요', interrupted: '중단됨' };
 const KINDS = new Set(['done', 'attention', 'interrupted', 'working', 'rest', 'boss']);
 const kc = (k) => (KINDS.has(k) ? k : 'done');
-const AV_COLORS = ['#3D6FD8', '#E07A5F', '#2E8B57', '#8A5CF6', '#D9A21B', '#1F9AA8'];
-const agentColor = (id) => agents.get(id)?.av.look.cloth || AV_COLORS[Math.abs(hashStr(String(id))) % AV_COLORS.length];
-const plainStatus = (d, role) => statusText(d, role).replace(/^\S+\s/, '');
+const plainStatus = (d, role) => statusText(d, role);
 function when(at) {
   if (!at) return '';
   const d = new Date(at);
@@ -1286,7 +1401,7 @@ function openConvo({ r = null, a = null, skip = null }) {
   cvAgentId = agentId;
   const seq = ++cvSeq;
   // 머리: 캐릭터 색 동그라미와 상태 표시, 이름, 상태 · 앱 · 저장소 · 시각
-  $('cvAv').style.background = agentColor(agentId);
+  setFace($('cvAv'), lookOf(agentId));
   $('cvAv').innerHTML = `<span class="cvk k-${kind}">${kind === 'working' ? ico('work') : kindIco(kind)}</span>`;
   const name = nickOf(agentId) || src.name;
   $('cvName').textContent = name;
@@ -1325,7 +1440,7 @@ function openConvo({ r = null, a = null, skip = null }) {
   renderInbox();
 }
 function drawConvo(turns, more, ctx) {
-  const color = esc(agentColor(ctx.agentId));
+  const face = faceStyle(lookOf(ctx.agentId));
   const out = [];
   if (more) out.push(`<p class="cvmore">더 이전 대화는 ${esc(ctx.app)}에서 볼 수 있어요</p>`);
   turns.forEach((t, i) => {
@@ -1343,13 +1458,15 @@ function drawConvo(turns, more, ctx) {
     if (body) {
       const tools = Math.max(0, Math.floor(Number(t.tools) || 0));
       const meta = [esc(ctx.name), Number(t.end) ? when(Number(t.end)) : '', tools ? `도구 ${tools}번` : '', t.interrupted === true ? '중단됨' : ''].filter(Boolean).join(' · ');
-      out.push(`<div class="msg ag"><span class="mav" style="background:${color}"></span><div class="mcol"><div class="cbub md">${body}</div><small>${meta}</small></div></div>`);
+      out.push(`<div class="msg ag"><span class="mav face" style="${face}"></span><div class="mcol"><div class="cbub md">${body}</div><small>${meta}</small></div></div>`);
     }
     out.push('</div>');
   });
   const note = (k, icon, b, sub) => `<div class="cvnote k-${k}">${ico(icon)}<div><b>${b}</b><span>${sub}</span></div></div>`;
-  if (ctx.kind === 'attention') out.push(note('attention', 'attn', `${esc(ctx.app)}에서 허락이나 답을 기다리고 있어요`, '답해 주면 이어서 일해요.'));
-  else if (ctx.kind === 'working') out.push(note('working', 'work', '지금 일하는 중이에요', esc([plainStatus(ctx.d), ctx.d?.toolHint].filter(Boolean).join(' · '))));
+  // 허락을 기다리는 질문은 버튼 줄 바로 위에 고정한다 (긴 대화에서도 바로 보이게)
+  $('cvWait').hidden = ctx.kind !== 'attention';
+  if (ctx.kind === 'attention') $('cvWait').innerHTML = `${ico('attn')}<div><b>${esc(ctx.app)}에서 허락이나 답을 기다리고 있어요</b><span>답해 주면 이어서 일해요.</span></div>`;
+  if (ctx.kind === 'working') out.push(note('working', 'work', '지금 일하는 중이에요', esc([plainStatus(ctx.d), ctx.d?.toolHint].filter(Boolean).join(' · '))));
   else if (ctx.kind === 'interrupted') out.push(note('interrupted', 'pause', '중간에 멈췄어요', `${esc(ctx.app)}에서 이어서 시킬 수 있어요.`));
   // Orca가 잘라 준 답을 이 Mac의 기록으로 못 채웠을 때만 알려 준다
   const ml = (ctx.r?.message || '').length;
@@ -1393,14 +1510,14 @@ $('cvBody').addEventListener('click', (e) => {
   b.textContent = b.previousElementSibling.classList.toggle('long') ? '전체 보기' : '접기';
 });
 $('rClose').onclick = closeReport;
-// 봤어요: 목록에서 빼고 다음 보고로 넘어간다 (마지막이면 닫는다)
+// 확인: 확인한 보고로 보내고 다음 보고로 넘어간다 (마지막이면 닫는다)
 $('rSeen').onclick = () => {
   const id = openReportId;
   if (!id) return closeReport();
   const i = cvNavIds.indexOf(id);
   const nextId = cvNavIds[i + 1] || cvNavIds[i - 1];
   setSeen([id], true);
-  const nr = nextId && inboxFilter !== 'seen' && (lastState.reports || []).find((x) => x.id === nextId && !x.seen);
+  const nr = nextId && inboxView !== 'seen' && (lastState.reports || []).find((x) => x.id === nextId && !x.seen);
   if (nr) openReport(nr, id);
   else closeReport();
 };
@@ -1428,14 +1545,28 @@ $('cvCopy').onclick = async () => {
 };
 $('inboxList').addEventListener('click', (e) => {
   if (e.target.closest('[data-demo]')) return $('demoBtn').click();
+  const view = e.target.closest('button[data-view]');
+  if (view) return setInboxView(view.dataset.view);
   const li = e.target.closest('li[data-id]');
   if (!li) return;
-  const act = e.target.closest('[data-act]');
-  if (act) return setSeen([li.dataset.id], act.dataset.act === 'seen');
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'seen' || act === 'unsee') return setSeen([li.dataset.id], act === 'seen');
   const r = (lastState.reports || []).find((x) => x.id === li.dataset.id);
-  if (r) openReport(r);
+  if (!r) return;
+  if (act === 'app') {
+    // 줄에서 바로 답하러 간다: 그 에이전트를 돌리던 앱(되면 그 대화)을 열고, 열어 본 보고로 표시한다
+    api('/api/open-app', { app: r.app, id: r.agentId });
+    if (!r.read) {
+      r.read = true;
+      api('/api/read', { id: r.id }).then(refresh);
+      inboxSig = '';
+      renderInbox();
+    }
+    return;
+  }
+  openReport(r);
 });
-// 봤어요: 지우지 않고 목록에서만 뺀다 ('본 것' 탭에서 다시 보거나 되돌릴 수 있다)
+// 확인: 지우지 않고 보고함에서만 뺀다 ('확인한 보고'에서 다시 보거나 되돌릴 수 있다)
 function setSeen(ids, seen, all = false) {
   const set = new Set(ids);
   const lis = [...$('inboxList').querySelectorAll('li[data-id]')].filter((li) => set.has(li.dataset.id));
@@ -1453,26 +1584,20 @@ function setSeen(ids, seen, all = false) {
   const sent = all ? [api('/api/seen', { all: true, seen })] : ids.map((id) => api('/api/seen', { id, seen }));
   Promise.all(sent).then(() => setTimeout(refresh, wait + 50));
 }
-for (const b of document.querySelectorAll('.itabs button'))
-  b.addEventListener('click', () => {
-    for (const x of document.querySelectorAll('.itabs button')) x.setAttribute('aria-selected', String(x === b));
-    if (b.dataset.f === 'staff') return setInboxView('staff'); // 직원 명부
-    inboxFilter = b.dataset.f;
-    setInboxView('reports');
-    renderInbox();
-  });
-// 모두 읽음: 지금 목록에 있는 보고를 모두 봤어요 처리해서 깔끔하게 비운다
+// 모두 확인: 나를 기다리는 보고만 남기고 모두 확인한 보고로 보낸다
 $('readAll').onclick = () => {
-  const ids = (lastState.reports || []).filter((r) => !r.seen).map((r) => r.id);
-  if (ids.length) setSeen(ids, true, true);
+  const byId = agentsById();
+  const open = (lastState.reports || []).filter((r) => !r.seen);
+  const ids = open.filter((r) => !waitingNow(r, byId)).map((r) => r.id);
+  if (ids.length) setSeen(ids, true, ids.length === open.length);
 };
 $('demoBtn').onclick = () =>
-  api('/api/demo', {}).then(() => UI.toast('🧪 연습 에이전트가 출근했어요', '13초쯤 일하다가 나한테 보고하러 와요.', 3200));
+  api('/api/demo', {}).then(() => UI.toast('연습 에이전트가 출근했어요', '13초쯤 일하다가 나한테 보고하러 와요.', 3200));
 const setInbox = (open) => {
   $('inbox').classList.toggle('collapsed', !open);
   $('inboxShow').hidden = open;
 };
-// 상단바에서 펼친 작은 창: 보고함은 한 줄로 접어 두고 누르면 펼친다 (창 높이는 main.js가 맞춘다)
+// 상단바에서 펼친 작은 창: 보고함을 펼치면 장면은 위쪽 띠로 줄고, 접으면 방이 크게 보인다 (창 높이는 main.js가 맞춘다)
 let miniInboxOpen = !!settings.miniInbox;
 let miniInboxTouched = 0;
 let unreadSeen = 0;
@@ -1484,6 +1609,10 @@ function setMiniInbox(open, save) {
   b.title = open ? '보고함 접기' : '보고함 펼치기';
   b.setAttribute('aria-label', b.title);
   b.setAttribute('aria-expanded', String(open));
+  if (MINI && sceneReady) {
+    cam.distT = open ? MINI_DIST.list : MINI_DIST.room; // 띠에서는 가까이 당겨서 캐릭터가 작아지지 않게
+    fitScene();
+  }
   if (save) {
     miniInboxTouched = Date.now();
     api('/api/settings', { miniInbox: open });
@@ -1503,14 +1632,15 @@ if (MINI) {
   $('inboxShow').onclick = () => setInbox(true);
 }
 
-// 보고함: 화면의 다른 곳을 누르면 닫는다 (큰 창은 옆 패널을 접고, 작은 창은 한 줄로 접는다)
-// 보고 자세히, 캐릭터 카드, 쉬는 에이전트 목록, 꾸미기, 작은 창 머리줄을 누를 때는 그대로 둔다
-const KEEP_INBOX = '#inbox, #inboxShow, .modal, #card, #restPanel, #musicPanel, #avPanel, #avPreview, #miniHead';
+// 큰 창의 보고함: 화면의 다른 곳을 누르면 옆으로 접는다 (작은 창은 접기 버튼으로만 접는다)
+// 대화 창, 캐릭터 카드, 쉬는 에이전트 목록, 꾸미기, 위쪽 상태 묶음과 직원 버튼을 누를 때는 그대로 둔다
+const KEEP_INBOX = '#inbox, #inboxShow, .modal, #card, #restPanel, #musicPanel, #avPanel, #avPreview, #statSeg, #staffBtn';
+function inboxShut() {
+  return $('inbox').classList.contains('collapsed');
+}
 document.addEventListener('pointerdown', (e) => {
-  if (e.target.closest(KEEP_INBOX)) return;
-  if (MINI) {
-    if (miniInboxOpen) setMiniInbox(false, true);
-  } else if (!$('inbox').classList.contains('collapsed')) setInbox(false);
+  if (MINI || e.target.closest(KEEP_INBOX)) return;
+  if (!inboxShut()) setInbox(false);
 });
 
 // 작은 창 고정: 켜 두면 다른 곳을 눌러도 안 닫히고, 맨 윗줄을 끌어서 옮길 수 있다
@@ -1525,7 +1655,7 @@ function setPin(on, save) {
     pinTouched = Date.now();
     api('/api/settings', { pinPopover: on });
     UI.toast(
-      on ? '📌 작은 창을 고정했어요' : '고정을 풀었어요',
+      on ? '작은 창을 고정했어요' : '고정을 풀었어요',
       on ? '다른 곳을 눌러도 안 닫혀요. 맨 윗줄을 끌면 옮길 수 있어요.' : '다른 곳을 누르면 다시 접혀요.',
       2600,
     );
@@ -1551,10 +1681,8 @@ $('soundBtn').onclick = () => setSound(!soundOn, true);
 let hideTouched = 0;
 function setHide(on, save) {
   settings.hideResting = on;
-  for (const id of ['hideBtn', 'mHide']) {
-    $(id).setAttribute('aria-pressed', String(on));
-    $(id).title = on ? '쉬는 에이전트 보이기' : '쉬는 에이전트 숨기기';
-  }
+  $('hideBtn').setAttribute('aria-pressed', String(on));
+  $('hideBtn').title = on ? '쉬는 에이전트 보이기' : '쉬는 에이전트 숨기기';
   $('restHideAll').checked = on;
   if (on) for (const a of [...agents.values()]) if (a.role === 'rest') leave(a);
   if (save) {
@@ -1565,13 +1693,12 @@ function setHide(on, save) {
 }
 setHide(!!settings.hideResting, false);
 $('hideBtn').onclick = (e) => (e.stopPropagation(), toggleRest());
-$('mHide').onclick = (e) => (e.stopPropagation(), toggleRest());
-$('mapSel').value = MAP_ID;
+$('mapName').textContent = { office: '작업실', cafe: '카페', stadium: '축구장', paris: '파리' }[MAP_ID];
 if (room.pitch) {
   $('fkBtn').hidden = false;
   $('hint').insertAdjacentHTML('beforeend', ' · <kbd>K</kbd> 프리킥');
 }
-$('mapSel').onchange = (e) => goMap(e.target.value);
+$('mapBtn').onclick = () => toggleDoor(undefined, true);
 // 맵을 바꾸면 화면을 잠깐 어둡게 했다가 새 맵을 연다
 function goMap(id) {
   if (!['office', 'cafe', 'stadium', 'paris'].includes(id)) return;
@@ -1579,12 +1706,20 @@ function goMap(id) {
   requestAnimationFrame(() => $('mapFade').classList.add('on'));
   setTimeout(() => api('/api/settings', { map: id }).then(() => location.reload()), 280);
 }
-// ---------- 문 앞에서 F: 맵 이동하기 ----------
+// ---------- 맵 고르기: 문 앞에서 F를 누르거나, 위쪽 막대의 맵 버튼을 누른다 ----------
 let doorOpen = false;
-function toggleDoor(force) {
+function toggleDoor(force, fromBar = false) {
   doorOpen = force ?? !doorOpen;
   $('doorPanel').hidden = !doorOpen;
+  $('mapBtn').setAttribute('aria-expanded', String(doorOpen && fromBar));
   if (!doorOpen) return UI.closeLayer('door');
+  // 맵 버튼에서 열면 버튼 아래에, 문 앞에서 열면 화면 아래 가운데에 띄운다
+  const P = $('doorPanel');
+  const b = fromBar ? $('mapBtn').getBoundingClientRect() : null;
+  P.style.top = b ? `${Math.round(b.bottom + 8)}px` : '';
+  P.style.left = b ? `${Math.round(clamp(b.left, 10, innerWidth - 430))}px` : '';
+  P.style.bottom = b ? 'auto' : '';
+  $('doorTitle').textContent = fromBar ? '맵 바꾸기' : '맵 이동하기';
   for (const b of document.querySelectorAll('#doorMaps .mapc')) {
     const here = b.dataset.map === MAP_ID;
     b.disabled = here;
@@ -1655,13 +1790,26 @@ function chime(alert) {
 }
 
 // ---------- 카메라: 나를 따라간다 ----------
-const cam = { yaw: -PI / 4, yawT: -PI / 4, pitch: MINI ? 1.02 : 0.95, dist: MINI ? 20 : 18, distT: MINI ? 20 : 18, tx: W / 2 - 0.6, tz: D / 2 };
+const MINI_DIST = { room: 20, list: 11.5 }; // 작은 창: 방을 크게 볼 때 / 보고함 위 띠로 볼 때
+const dist0 = MINI ? (miniInboxOpen ? MINI_DIST.list : MINI_DIST.room) : 18;
+const cam = { yaw: -PI / 4, yawT: -PI / 4, pitch: MINI ? 1.02 : 0.95, dist: dist0, distT: dist0, tx: W / 2 - 0.6, tz: D / 2, focus: null };
+sceneReady = true;
+if (MINI) fitScene(); // 보고함을 접은 채로 시작하면 장면 상자가 달라져 있다
 function updateCamera(dt) {
   cam.yaw = angleDamp(cam.yaw, cam.yawT, 9, dt);
   cam.dist = damp(cam.dist, cam.distT, 9, dt);
   const mx = MINI ? 4.5 : 3;
-  cam.tx = damp(cam.tx, clamp(me.x, mx, W - mx), 3, dt);
-  cam.tz = damp(cam.tz, clamp(me.z, mx - 0.5, D - mx + 0.5), 3, dt);
+  // 상태 묶음에서 고른 에이전트를 잠깐 따라간다 (내가 움직이면 바로 나에게 돌아온다)
+  let px = me.x;
+  let pz = me.z;
+  if (cam.focus) {
+    const a = agents.get(cam.focus.id);
+    cam.focus.t -= dt;
+    if (!a || cam.focus.t <= 0 || me.moving) cam.focus = null;
+    else [px, pz] = [a.x, a.z];
+  }
+  cam.tx = damp(cam.tx, clamp(px, mx, W - mx), 3, dt);
+  cam.tz = damp(cam.tz, clamp(pz, mx - 0.5, D - mx + 0.5), 3, dt);
   const cp = Math.cos(cam.pitch);
   const sp = Math.sin(cam.pitch);
   camera.position.set(cam.tx + Math.sin(cam.yaw) * cp * cam.dist, 0.3 + sp * cam.dist, cam.tz + Math.cos(cam.yaw) * cp * cam.dist);
@@ -1886,6 +2034,21 @@ canvas.addEventListener('pointermove', (e) => {
   cam.yaw = cam.yawT;
   cam.pitch = clamp(cam.pitch + dy * 0.004, 0.55, 1.4);
 });
+// 마우스를 올린 캐릭터: 이름표에 하는 일을 펼치고, 누를 수 있다는 걸 커서로 알린다
+let hoverAt = 0;
+canvas.addEventListener('pointermove', (e) => {
+  if (drag || e.pointerType !== 'mouse') return;
+  const now = performance.now();
+  if (now - hoverAt < 70) return;
+  hoverAt = now;
+  const hit = pick(e.clientX, e.clientY);
+  hoverId = hit?.agent?.id || null;
+  canvas.classList.toggle('pick', !!hit);
+});
+canvas.addEventListener('pointerleave', () => {
+  hoverId = null;
+  canvas.classList.remove('pick');
+});
 const endDrag = (e) => {
   if (!drag || e.pointerId !== drag.id) return;
   const moved = drag.moved;
@@ -1909,6 +2072,7 @@ canvas.addEventListener(
 );
 
 let cardAgent = null;
+let cardShown = false; // 카드가 떠 있는 동안 그 캐릭터의 이름표를 펼쳐 둔다
 // 이름은 글자로 보여 주고, 연필(또는 두 번 누르기)로 바꾼다
 function setCardEditing(on) {
   $('card').querySelector('.cname').hidden = on;
@@ -1926,9 +2090,11 @@ function showCard(hit, x, y) {
   cl.hidden = !sf;
   if (sf) {
     const next = RANK_AT[sf.rank + 1];
-    cl.innerHTML = `<div class="lrow"><span class="rk r${sf.rank}">${RANK_NAMES[sf.rank]}</span><b>충성도 ${sf.pts}</b><small>${next != null ? `${RANK_NAMES[sf.rank + 1]}까지 ${next - sf.pts}점` : '최고 직급이에요'}</small></div><div class="lgauge"><i style="width:${sf.pts}%"></i></div>${
-      sf.last ? `<small class="llast">최근: ${esc(sf.last.why)} ${sf.last.delta > 0 ? '+' : ''}${sf.last.delta}</small>` : ''
-    }`;
+    // 충성도는 맨 아래 한 줄로 (최근에 점수가 바뀐 이유는 올리면 보인다)
+    cl.innerHTML = `<span class="rk r${sf.rank}">${RANK_NAMES[sf.rank]}</span><b>충성도 ${sf.pts}</b><span class="lgauge"><i style="width:${sf.pts}%"></i></span><small>${
+      next != null ? `${RANK_NAMES[sf.rank + 1]}까지 ${next - sf.pts}점` : '최고 직급'
+    }</small>`;
+    cl.title = sf.last ? `최근: ${sf.last.why} ${sf.last.delta > 0 ? '+' : ''}${sf.last.delta}` : '';
   }
   setCardEditing(false);
   $('cardName').maxLength = hit.boss ? 16 : 20;
@@ -1942,7 +2108,7 @@ function showCard(hit, x, y) {
     name = me.lbl.nm.textContent || '나';
     card.querySelector('.cstat').innerHTML = `<em class="kchip k-boss">사장님</em>${n ? `에이전트 ${n}명이 일하는 중이에요` : '지금은 다들 쉬는 중이에요'}`;
     card.querySelector('.cbody').innerHTML = '<p class="ctip">방향키로 걷고, F로 앉고, V를 누르면 내 눈높이로 봐요.</p>';
-    card.querySelector('.cav').style.background = bossLook.cloth;
+    setFace(card.querySelector('.cav'), bossLook);
     btns = `<button type="button" class="btn" data-c="look">${ico('face')}꾸미기</button>`;
   } else {
     const a = hit.agent;
@@ -1957,7 +2123,7 @@ function showCard(hit, x, y) {
     if (ACTIVE.has(d.state) && d.toolHint) rows.push(['지금', d.toolHint, '']);
     else if (d.message && !ACTIVE.has(d.state)) rows.push([kind === 'attention' ? '마지막 말' : '마지막 답', clean(d.message), 'c3']);
     card.querySelector('.cbody').innerHTML = rows.map(([k, v, c]) => `<div class="crow"><span>${k}</span><p${c ? ` class="${c}"` : ''}>${esc(v)}</p></div>`).join('');
-    card.querySelector('.cav').style.background = a.av.look.cloth;
+    setFace(card.querySelector('.cav'), a.av.look);
     const talk = d.prompt || d.message ? `<button type="button" class="btn${kind === 'attention' ? ' ghost' : ''}" data-c="talk">대화 보기</button>` : '';
     const open =
       d.app && !d.demo
@@ -1969,6 +2135,7 @@ function showCard(hit, x, y) {
   $('cardName').value = name;
   card.querySelector('.cbtns').innerHTML = btns;
   card.hidden = false;
+  cardShown = true;
   const box = card.getBoundingClientRect();
   card.style.left = clamp(x + 14, 8, innerWidth - box.width - 8) + 'px';
   card.style.top = clamp(y - 30, 8, innerHeight - box.height - 8) + 'px';
@@ -1977,6 +2144,7 @@ function showCard(hit, x, y) {
 function hideCard() {
   if (!$('cardName').hidden) (cardAgent ? saveAgentName(cardAgent, $('cardName').value) : saveBossName($('cardName').value));
   $('card').hidden = true;
+  cardShown = false;
   UI.closeLayer('card');
 }
 $('cardClose').onclick = hideCard;
@@ -2045,19 +2213,13 @@ for (const id of ['cardName', 'avName']) {
   });
 }
 
-addEventListener('resize', () => {
-  VB = viewBox();
-  renderer.setSize(VB.w, VB.h);
-  camera.aspect = VB.w / VB.h;
-  camera.updateProjectionMatrix();
-});
+addEventListener('resize', fitScene);
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (b && e.detail > 0) b.blur();
 });
 setTimeout(() => {
   $('hint').style.opacity = '0';
-  $('miniHint').style.opacity = '0';
 }, 14000);
 
 // ---------- 매 프레임 ----------
@@ -2074,17 +2236,29 @@ function updateLabels(now) {
   }
   for (const a of agents.values()) {
     a.av.labelAnchor(_a);
-    place(a.lbl, _a.x, _a.y, _a.z);
-    setText(a.lbl.nm, 'nmText', a.lbl, short(nameOf(a.data), 18));
-    setText(a.lbl.sub, 'subText', a.lbl, statusText(a.data, a.role));
-    const attn = ATTN.has(a.data.state) && a.role !== 'report';
-    if (a.lbl.attn !== attn) {
-      a.lbl.attn = attn;
-      a.lbl.sub.classList.toggle('attn', attn);
+    const L = a.lbl;
+    place(L, _a.x, _a.y, _a.z);
+    setText(L.nm, 'nmText', L, short(nameOf(a.data), 18));
+    const s = labelState(a);
+    if (L.state !== s) {
+      L.state = s;
+      L.el.dataset.s = s;
     }
-    if (a.lbl.bubUntil && now > a.lbl.bubUntil) {
-      a.lbl.bub.hidden = true;
-      a.lbl.bubUntil = 0;
+    setText(L.st, 'stText', L, s === 'attn' ? (a.data.state === 'blocked' ? '허락 필요' : '답 필요') : '');
+    const sub = statusText(a.data, a.role);
+    const icon = statusIco(a.data, a.role);
+    if (L.subKey !== icon + sub) {
+      L.subKey = icon + sub;
+      L.sub.innerHTML = sub ? ico(icon) + esc(sub) : '';
+    }
+    const hov = a.id === hoverId || (cardShown && a === cardAgent);
+    if (L.hov !== hov) {
+      L.hov = hov;
+      L.el.classList.toggle('hov', hov);
+    }
+    if (L.bubUntil && now > L.bubUntil) {
+      L.bub.hidden = true;
+      L.bubUntil = 0;
     }
   }
 }
@@ -2191,24 +2365,47 @@ function checkPromos(st, first) {
     if (promoSeen.has(pr.id)) continue;
     promoSeen.add(pr.id);
     if (first || Date.now() - pr.at > 60000) continue;
-    UI.toast(`🎉 ${pr.name}`, `${ro(pr.title)} 승진했어요!`, 3800);
+    // 승진은 그 캐릭터 머리 위 말풍선과 폭죽으로 알린다 (작업실에 없을 때만 알림 쪽지)
     const a = [...agents.values()].find((x) => x.data.staffKey === pr.key);
+    if (a) showBubble(a.lbl, `${ro(pr.title)} 승진했어요!`, 'promo', 4200);
+    else UI.toast(pr.name, `${ro(pr.title)} 승진했어요!`, 3800);
     const x = a ? a.x : me.x;
     const z = a ? a.z : me.z;
     for (let i = 0; i < 4; i++) setTimeout(() => fx.burst(x + (Math.random() - 0.5) * 1.2, 1.6 + Math.random() * 0.6, z + (Math.random() - 0.5) * 1.2, 40), i * 260);
     chime();
   }
 }
-let inboxView = 'reports';
 let staffSig = '';
+// 보고함 안에서 보기 바꾸기: 보고함, 확인한 보고, 직원 명부
 function setInboxView(v) {
   inboxView = v;
+  $('inbox').dataset.show = v;
   document.body.classList.toggle('staffv', v === 'staff');
   $('staffView').hidden = v !== 'staff';
   $('inboxList').hidden = v === 'staff';
+  $('inboxBack').hidden = v === 'reports';
+  $('inboxTitle').textContent = v === 'staff' ? '직원 명부' : v === 'seen' ? '확인한 보고' : '보고함';
+  for (const id of ['staffBtn', 'iStaff']) $(id).setAttribute('aria-pressed', String(v === 'staff'));
+  inboxSig = '';
   staffSig = '';
+  renderInbox();
   renderStaff();
+  $('inboxList').scrollTop = 0;
 }
+$('inboxBack').onclick = (e) => {
+  e.stopPropagation();
+  setInboxView('reports');
+};
+function toggleStaff() {
+  const on = inboxView !== 'staff';
+  if (on) MINI ? setMiniInbox(true, true) : setInbox(true);
+  setInboxView(on ? 'staff' : 'reports');
+}
+$('staffBtn').onclick = toggleStaff;
+$('iStaff').onclick = (e) => {
+  e.stopPropagation();
+  toggleStaff();
+};
 function renderStaff() {
   if (inboxView !== 'staff') return;
   const list = Object.entries(lastState.staff || {}).sort((p, q) => q[1].pts - p[1].pts);
@@ -2216,8 +2413,8 @@ function renderStaff() {
   if (sig === staffSig) return;
   staffSig = sig;
   const mvp = list.filter(([, v]) => v.today > 0).sort((p, q) => q[1].today - p[1].today)[0];
-  $('mvp').innerHTML = `<span class="mvpic">🏆</span><span><small>오늘의 MVP</small><b>${mvp ? esc(mvp[1].name) : '아직 없어요'}</b><em>${
-    mvp ? `오늘 +${mvp[1].today}점` : '보고를 빨리 읽어 주면 점수가 올라요'
+  $('mvp').innerHTML = `<span class="mvpic">${ico('trophy')}</span><span><small>오늘의 MVP</small><b>${mvp ? esc(mvp[1].name) : '아직 없어요'}</b><em>${
+    mvp ? `오늘 +${mvp[1].today}점` : '보고를 빨리 확인해 주면 점수가 올라요'
   }</em></span>`;
   $('staffList').innerHTML = list.length
     ? list
@@ -2241,12 +2438,12 @@ const restingNow = () =>
 function toggleRest(force) {
   restOpen = force ?? !restOpen;
   $('restPanel').hidden = !restOpen;
-  for (const id of ['hideBtn', 'mHide']) $(id).setAttribute('aria-expanded', String(restOpen));
+  $('hideBtn').setAttribute('aria-expanded', String(restOpen));
   if (restOpen) {
-    const b = $(MINI ? 'mHide' : 'hideBtn').getBoundingClientRect();
+    const b = $('hideBtn').getBoundingClientRect();
     const P = $('restPanel');
     P.style.top = `${Math.round(b.bottom + 8)}px`;
-    P.style.right = MINI ? '10px' : `${Math.max(10, Math.round(innerWidth - b.right))}px`;
+    P.style.right = `${Math.max(10, Math.round(innerWidth - b.right))}px`;
     restSig = '';
     renderRest();
     UI.openLayer('rest', () => toggleRest(false), false);
@@ -2258,7 +2455,6 @@ function renderRest() {
   // 버튼의 숫자: 작업실에 남아 쉬는 에이전트
   const n = awake.length;
   $('hideBtn').innerHTML = `${ico('rest')}<span class="w">쉬는 에이전트</span>${n ? `<b class="rc">${n}</b>` : ''}`;
-  $('mHide').classList.toggle('has', n > 0);
   if (!restOpen) return;
   const sig = JSON.stringify([list.map((d) => [d.id, wentHome(d)]), settings.hideResting, Math.floor(Date.now() / 60000)]);
   if (sig === restSig) return;
@@ -2304,7 +2500,7 @@ $('restGo').onclick = () => {
       api('/api/send-home', { id, since: d.stateStartedAt || 0 });
     }
   }
-  if (ids.length) UI.toast(`🏠 ${ids.length}명 퇴근했어요`, '새 일을 받으면 다시 출근해요.', 2400);
+  if (ids.length) UI.toast(`${ids.length}명 퇴근했어요`, '새 일을 받으면 다시 출근해요.', 2400);
   restSig = '';
   renderRest();
 };
@@ -2325,11 +2521,56 @@ $('restHideAll').addEventListener('change', (e) => {
 });
 $('restClose').onclick = () => toggleRest(false);
 document.addEventListener('pointerdown', (e) => {
-  if (restOpen && !e.target.closest('#restPanel, #hideBtn, #mHide')) toggleRest(false);
+  if (restOpen && !e.target.closest('#restPanel, #hideBtn')) toggleRest(false);
   if (musicPanelOpen && !e.target.closest('#musicPanel, #musicBtn')) toggleMusicPanel(false);
-  if (doorOpen && !e.target.closest('#doorPanel, #act')) toggleDoor(false);
+  if (doorOpen && !e.target.closest('#doorPanel, #act, #mapBtn')) toggleDoor(false);
+  if (skillsOpen && !e.target.closest('#skills, #skillBtn')) toggleSkills(false);
   if (updOpen && !e.target.closest('#updPanel, #updBtn')) toggleUpd(false);
 });
+
+// ---------- 업데이트 안내: 쓰던 사람이 새 버전을 처음 열 때 한 번만 뜬다 ----------
+// 이름표가 간단해진 것을 알리고, 예전처럼 직급과 하는 일을 늘 보는 설정을 그 자리에서 켤 수 있게 한다
+let tagTouched = 0;
+function setTagDetail(on, save) {
+  document.body.classList.toggle('tagd', on);
+  $('newsTag').checked = on;
+  if (save) {
+    tagTouched = Date.now();
+    settings.tagDetail = on;
+    api('/api/settings', { tagDetail: on });
+  }
+}
+let newsOpen = false;
+let newsDone = false; // 닫은 뒤 서버에 저장되기 전까지 다시 뜨지 않게
+function showNews(on) {
+  if (on && newsDone) return;
+  if (on === newsOpen) return;
+  newsOpen = on;
+  $('newsPanel').hidden = !on;
+  if (on) UI.openLayer('news', closeNews, false);
+  else UI.closeLayer('news');
+}
+function closeNews() {
+  newsDone = true;
+  showNews(false);
+  api('/api/settings', { newsSeen: true });
+}
+$('newsTag').onchange = (e) => setTagDetail(e.target.checked, true);
+$('newsOk').onclick = closeNews;
+$('newsClose').onclick = closeNews;
+
+// ---------- 동작 창: 인사, 춤, 1인칭 같은 버튼을 '동작' 하나로 접어 둔다 (단축키는 늘 먹는다) ----------
+let skillsOpen = false;
+function toggleSkills(force) {
+  skillsOpen = force ?? !skillsOpen;
+  $('skills').hidden = !skillsOpen;
+  $('skillBtn').setAttribute('aria-expanded', String(skillsOpen));
+  if (!skillsOpen) return UI.closeLayer('skills');
+  $('hint').style.opacity = '0'; // 조작법은 동작 창 아래에 적혀 있다
+  UI.openLayer('skills', () => toggleSkills(false), false);
+}
+$('skillBtn').onclick = () => toggleSkills();
+$('skillClose').onclick = () => toggleSkills(false);
 
 // ---------- 작업실 라디오: '음악' 버튼 아래 작은 팝업 (소리는 main.js의 숨은 창에서 만든다) ----------
 let musicPanelOpen = false;
@@ -2509,7 +2750,7 @@ window.openMusicFromMain = (tab) => {
 if (!MINI && q.get('open') === 'music') setTimeout(() => window.openMusicFromMain(q.get('tab')), 500);
 
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
-if (q.get('debug') === '1') window.__ao = { agents, me, used, room, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard };
+if (q.get('debug') === '1') window.__ao = { agents, me, used, room, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard, goMap, setInboxView };
 
 if (boot && Array.isArray(boot.agents) && boot.at) sync(boot);
 setInterval(refresh, 1000);

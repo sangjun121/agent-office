@@ -9,8 +9,9 @@ const { app, BrowserWindow } = require('electron');
 
 const ROOT = path.join(__dirname, '..');
 const MODE = ['stills', 'hero', 'promo'].find((m) => process.argv.includes(m)) || 'stills';
-const OUT = MODE === 'stills' ? path.join(ROOT, 'docs') : path.join(os.tmpdir(), 'agent-office-record', MODE);
-const { startServer } = require(path.join(ROOT, 'server.js'));
+// AO_SHOTS_OUT을 주면 그 폴더에 찍는다 (docs를 건드리지 않고 화면만 확인할 때)
+const OUT = process.env.AO_SHOTS_OUT || (MODE === 'stills' ? path.join(ROOT, 'docs') : path.join(os.tmpdir(), 'agent-office-record', MODE));
+const { startServer, NEWS_ID } = require(path.join(ROOT, 'server.js'));
 const { getAppIcons } = require(path.join(ROOT, 'appicons.js'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fileUrl = (f) => 'file://' + f.split(path.sep).map(encodeURIComponent).join('/');
@@ -243,7 +244,7 @@ app.on('window-all-closed', () => {});
 app.whenReady().then(async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const settingsPath = path.join(os.tmpdir(), `ao-rec-${MODE}.json`);
-  fs.writeFileSync(settingsPath, JSON.stringify({ setupDone: true, bossName: '나', map: 'office', sound: false, notify: false, staff: STAFF }));
+  fs.writeFileSync(settingsPath, JSON.stringify({ setupDone: true, bossName: '나', map: 'office', sound: false, notify: false, staff: STAFF, newsSeen: NEWS_ID }));
   const srv = await startServer({ port: 0, settingsPath, fixture, fixtureConvo: CONVO, fixtureDetect: DETECT, getAppIcons });
   appUrl = srv.url + '&debug=1';
   miniUrl = srv.url + '&mode=mini';
@@ -284,7 +285,7 @@ async function mapServers() {
   const out = {};
   for (const m of ['stadium', 'paris']) {
     const sp = path.join(os.tmpdir(), `ao-rec-${m}.json`);
-    fs.writeFileSync(sp, JSON.stringify({ setupDone: true, bossName: '나', map: m, sound: false, notify: false, staff: STAFF }));
+    fs.writeFileSync(sp, JSON.stringify({ setupDone: true, bossName: '나', map: m, sound: false, notify: false, staff: STAFF, newsSeen: NEWS_ID }));
     out[m] = await startServer({ port: 0, settingsPath: sp, fixture, fixtureConvo: CONVO, fixtureDetect: DETECT, getAppIcons });
   }
   return out;
@@ -337,16 +338,16 @@ async function promo() {
   await sleep(300);
   // 직원 명부
   await js("S.cap('보고를 빨리 읽어 주면 승진해요')");
-  const tab = await stagePos('.itabs [data-f=staff]');
+  const tab = await stagePos('#staffBtn');
   await js(`S.cur(${tab.x}, ${tab.y}, 800)`);
   await sleep(900);
   await js('S.click()');
-  await inApp("document.querySelector('.itabs [data-f=staff]').click()");
+  await inApp("document.getElementById('staffBtn').click()");
   await sleep(2600);
   // 1인칭 (그사이 다른 맵을 미리 띄워 둔다)
   await js(`S.on('cur', false); document.getElementById('mini').src = ${JSON.stringify(miniUrl)}`);
   await js(`document.getElementById('map-stadium').src = ${JSON.stringify(maps.stadium.url + '&debug=1')}; document.getElementById('map-paris').src = ${JSON.stringify(maps.paris.url + '&debug=1')}`);
-  await inApp("document.querySelector('.itabs [data-f=all]').click(); document.getElementById('inboxHide').click()");
+  await inApp("document.getElementById('inboxBack').click(); document.getElementById('inboxHide').click()");
   await js("S.cap('V를 누르면 내 눈높이로 둘러봐요')");
   await sleep(300);
   await key('KeyV');
@@ -372,7 +373,8 @@ async function promo() {
   // 상단바
   await js("S.cap('상단바에서 언제든 슬쩍 확인해요')");
   const tp = await js('S.trayPos()');
-  await js(`document.getElementById('pop').style.left = '${Math.round(Math.min(SW - 452, tp.x - 220))}px'`);
+  // 열어 볼 보고가 있으면 작은 창은 보고함을 펼친 채로 뜬다 (창 높이 640)
+  await js(`document.getElementById('pop').style.left = '${Math.round(Math.min(SW - 452, tp.x - 220))}px'; document.getElementById('pop').style.height = '640px'`);
   await js(`S.cur(${WIN.x + WIN.w * 0.7}, ${WIN.y + 200}, 0); S.on('cur')`);
   await sleep(100);
   await js(`S.cur(${tp.x + 2}, ${tp.y + 1}, 900)`);
@@ -428,10 +430,10 @@ async function stills(srv) {
   await inApp("document.getElementById('report').hidden || document.getElementById('rClose').click()");
   await sleep(400);
   // 4) 직원 명부
-  await inApp("document.querySelector('.itabs [data-f=staff]').click()");
+  await inApp("document.getElementById('staffBtn').click()");
   await sleep(900);
   await still('staff.jpg', CROP);
-  await inApp("document.querySelector('.itabs [data-f=all]').click()");
+  await inApp("document.getElementById('inboxBack').click()");
   // 5) 캐릭터 카드 (이름 바꾸기) — 결제 API 정리 에이전트를 누른 것처럼
   await inApp("(() => { const a = [...__ao.agents.values()].find((x) => x.id === 'f2'); const r = a.lbl.el.getBoundingClientRect(); __ao.showCard({ agent: a }, r.right, r.bottom + 50); })()");
   await sleep(700);
@@ -480,10 +482,13 @@ async function stills(srv) {
   const left = Math.round(Math.min(SW - 452, tp.x - 220));
   await js(`document.getElementById('pop').style.left = '${left}px'; S.on('tray'); S.on('pop')`);
   await sleep(800);
+  // 열어 볼 보고가 있으면 보고함을 펼친 채로 뜬다: 먼저 접은 모습(방을 크게), 다음에 펼친 모습(보고함 먼저)
+  await inMini("document.body.classList.contains('ishut') || document.getElementById('inboxHide').click()");
+  await sleep(1200);
   await still('menubar.jpg', { x: SW - 760, y: 0, w: 760, h: 470 });
   await inMini("document.getElementById('inboxHide').click()");
   await js("document.getElementById('pop').style.height = '640px'");
-  await sleep(1200);
+  await sleep(1400);
   await still('menubar-open.jpg', { x: SW - 760, y: 0, w: 760, h: 700 });
   // 10) 작업실 라디오 팝업
   await js("S.on('pop', false); S.on('tray', false); S.off('win', false)");
@@ -496,13 +501,13 @@ async function stills(srv) {
   }
   await inApp("document.getElementById('musicClose').click()");
   // 11) 카페, 축구장, 파리 맵
-  await inApp("(() => { const s = document.getElementById('mapSel'); s.value = 'cafe'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
+  await inApp("__ao.goMap('cafe')");
   await sleep(1500);
   await until(() => inApp("!!(window.__ao && __ao.agents.size >= 7 && document.getElementById('loading').classList.contains('done'))"), 20000);
   await sleep(2500);
   await still('cafe.jpg', CROP);
   for (const m of ['stadium', 'paris']) {
-    await inApp(`(() => { const s = document.getElementById('mapSel'); s.value = '${m}'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await inApp(`__ao.goMap('${m}')`);
     await sleep(1500);
     await until(() => inApp("!!(window.__ao && __ao.agents.size >= 7 && document.getElementById('loading').classList.contains('done'))"), 20000);
     await sleep(2500);
