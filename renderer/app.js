@@ -2697,7 +2697,7 @@ $('skillClose').onclick = () => toggleSkills(false);
 
 // ---------- 작업실 라디오: '음악' 버튼 아래 작은 팝업 (소리는 main.js의 숨은 창에서 만든다) ----------
 let musicPanelOpen = false;
-let radioNow = { on: false, station: 'lofi', volume: 0.6 };
+let radioNow = { on: false, station: 'lofi', volume: 0.6, mask: false };
 let radioTouched = 0;
 function placeMusicPanel() {
   const b = $('musicBtn').getBoundingClientRect();
@@ -2724,11 +2724,12 @@ function showRadio(r, force) {
   if (!r) return;
   // 방금 직접 바꿨으면 서버 값이 따라올 때까지 잠깐 기다린다 (슬라이더가 튀지 않게)
   if (!force && Date.now() - radioTouched < 1500) return;
-  radioNow = { on: !!r.on, station: r.station || 'lofi', volume: Number.isFinite(r.volume) ? r.volume : 0.6 };
+  radioNow = { on: !!r.on, station: r.station || 'lofi', volume: Number.isFinite(r.volume) ? r.volume : 0.6, mask: r.mask === true };
   updateMusicBtn();
   for (const b of document.querySelectorAll('#musicPanel .rst')) b.setAttribute('aria-pressed', String(b.dataset.st === radioNow.station));
   $('radioPlay').textContent = radioNow.on ? '멈춤' : '재생';
   $('radioVol').value = String(Math.round(radioNow.volume * 100));
+  $('radioMask').checked = radioNow.mask;
 }
 function radioSend(r) {
   radioTouched = Date.now();
@@ -2740,6 +2741,8 @@ $('musicBtn').onclick = () => toggleMusicPanel();
 $('musicClose').onclick = () => toggleMusicPanel(false);
 for (const b of document.querySelectorAll('#musicPanel .rst')) b.onclick = () => radioSend({ on: true, station: b.dataset.st });
 $('radioPlay').onclick = () => radioSend({ on: !radioNow.on, station: radioNow.station });
+// 소음 가리기: 채널을 바꿔도 켜 둔 채로 함께 나온다
+$('radioMask').onchange = (e) => radioSend({ mask: e.target.checked });
 let volTimer = 0;
 $('radioVol').oninput = (e) => {
   const v = Number(e.target.value) / 100;
@@ -2771,7 +2774,7 @@ function setMusicTab(tab) {
 }
 function updateMusicBtn() {
   $('musicBtn').setAttribute('aria-pressed', String(radioNow.on || ytNow.on));
-  $('musicState').textContent = radioNow.on ? `${STATION_KO[radioNow.station] || ''} 재생 중` : ytNow.on ? 'YouTube 재생 중' : '';
+  $('musicState').textContent = radioNow.on ? `${STATION_KO[radioNow.station] || ''}${radioNow.mask ? ' + 소음 가리기' : ''} 재생 중` : ytNow.on ? 'YouTube 재생 중' : '';
 }
 // ---------- YouTube 칸: 링크를 넣으면 영상 칸에 작게 튼다 (칸을 접어도 소리는 계속) ----------
 let ytNow = { on: false, title: '' };

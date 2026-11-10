@@ -63,6 +63,8 @@ function showMenu() {
           { label: '끄기', type: 'radio', checked: !radio.on, click: () => setRadio({ on: false }) },
           { type: 'separator' },
           ...STATIONS.map(([id, label]) => ({ label, type: 'radio', checked: radio.on && radio.station === id, click: () => setRadio({ on: true, station: id }) })),
+          { type: 'separator' },
+          { label: '소음 가리기 함께 켜기', type: 'checkbox', checked: radio.mask, click: () => setRadio({ mask: !radio.mask }) },
         ],
       },
       {
@@ -275,7 +277,7 @@ const STATIONS = [
   ['cabin', '비행기 안'],
 ];
 let radioWin = null;
-const radio = { on: false, station: 'lofi', volume: 0.6 };
+const radio = { on: false, station: 'lofi', volume: 0.6, mask: false }; // mask: 소음 가리기를 채널과 함께 켠다
 function radioPush() {
   if (radioWin && !radioWin.isDestroyed()) radioWin.webContents.executeJavaScript(`window.radio && window.radio.set(${JSON.stringify(radio)})`).catch(() => {});
 }
@@ -300,7 +302,8 @@ function setRadio(s) {
   if (STATIONS.some(([id]) => id === s.station)) radio.station = s.station;
   if (Number.isFinite(s.volume)) radio.volume = Math.max(0, Math.min(1, s.volume));
   if (typeof s.on === 'boolean') radio.on = s.on;
-  srv?.saveRadio?.({ station: radio.station, volume: radio.volume });
+  if (typeof s.mask === 'boolean') radio.mask = s.mask;
+  srv?.saveRadio?.({ station: radio.station, volume: radio.volume, mask: radio.mask });
   if (radio.on && ytOn()) ytStop(); // 라디오를 켜면 YouTube는 끈다 (하나만 나오게)
   radioApply();
 }
@@ -648,6 +651,7 @@ app.whenReady().then(async () => {
   const savedRadio = srv.getSettings().radio || {};
   if (STATIONS.some(([id]) => id === savedRadio.station)) radio.station = savedRadio.station;
   if (Number.isFinite(savedRadio.volume)) radio.volume = Math.max(0, Math.min(1, savedRadio.volume));
+  radio.mask = savedRadio.mask === true;
   setupUrl = srv.setupUrl;
   // 외부 인터넷 차단: 앱 화면은 이 Mac 안의 작업실 서버(127.0.0.1)에만 접속할 수 있다
   const local = `http://127.0.0.1:${srv.port}/`;

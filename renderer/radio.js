@@ -1,6 +1,7 @@
 // 작업실 라디오: 인터넷 없이 Web Audio로 그 자리에서 만드는 음악 (음악 파일이 없어서 저작권 걱정도 없다)
-// main.js가 숨은 창에서 이 페이지를 띄우고 window.radio.set({ on, station, volume })로 조절한다.
+// main.js가 숨은 창에서 이 페이지를 띄우고 window.radio.set({ on, station, volume, mask })로 조절한다.
 // 채널: lofi(로파이), piano(피아노), rain(빗소리), focus(집중 소음), cabin(비행기 안)
+// mask(소음 가리기)는 채널이 아니라, 고른 채널 밑에 함께 깔리는 소리다
 const ctx = new AudioContext({ latencyHint: 'playback' });
 const out = ctx.createGain();
 out.gain.value = 0;
@@ -413,6 +414,50 @@ function focus() {
   };
 }
 
+// 소음 가리기: 옆자리 말소리, 키보드 소리를 덮는 고른 소음 (마이크는 쓰지 않는다. 소리를 지우는 것이 아니라 덮는다)
+// 채널과 따로 켜고 끈다. 켜 두면 로파이든 비행기 안이든 고른 채널 밑에 함께 깔린다
+// 말소리가 몰린 음역(300~3000Hz)을 채우고, 크기가 출렁이면 덮는 힘이 약해지므로 일부러 변화 없이 고르게 낸다
+function mask() {
+  const bus = makeBus();
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 110;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 5200;
+  lp.Q.value = 0.3;
+  // 말소리 음역을 조금 도드라지게
+  const voice = ctx.createBiquadFilter();
+  voice.type = 'peaking';
+  voice.frequency.value = 1100;
+  voice.Q.value = 0.5;
+  voice.gain.value = 4;
+  hp.connect(voice).connect(lp).connect(bus);
+  // 같은 소음 두 겹을 속도를 조금 다르게 틀어서, 6초마다 되풀이되는 티가 나지 않게 한다
+  const a = loop(PINK, hp, 0.62);
+  const b = loop(PINK, hp, 0.52);
+  a.src.playbackRate.value = 0.94;
+  b.src.playbackRate.value = 1.07;
+  // 낮게 받쳐 주는 소리 (쉬익 소리만 나면 귀가 쉽게 피곤하다)
+  const low = ctx.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 420;
+  low.connect(bus);
+  const bed = loop(BROWN, low, 0.34);
+  return {
+    bus,
+    stop() {
+      for (const s of [a.src, b.src, bed.src]) {
+        try {
+          s.stop();
+        } catch {}
+      }
+      setTimeout(() => bus.disconnect(), 200);
+    },
+    schedule() {},
+  };
+}
+
 // 비행기 안: 낮게 깔리는 엔진 소리와 환기구 바람 소리 위로, 가끔 기내 방송 전의 '띵동'이 울린다
 // 띵동은 종소리처럼 배음을 겹친 두 음(높은 음 → 낮은 음)이고, 기내 스피커처럼 살짝 좁게 걸러서 낸다
 function cabin() {
@@ -513,6 +558,22 @@ function cabin() {
 }
 
 const STATIONS = { lofi, piano: pianoStation, rain, focus, cabin };
+// 소음 가리기 켜고 끄기 (채널과 따로 움직인다)
+let maskNow = null;
+function setMask(want) {
+  const now = ctx.currentTime;
+  if (want && !maskNow) {
+    maskNow = mask();
+    maskNow.bus.gain.setValueAtTime(0, now);
+    maskNow.bus.gain.setTargetAtTime(0.85, now + 0.05, 0.5);
+  } else if (!want && maskNow) {
+    const old = maskNow;
+    maskNow = null;
+    old.bus.gain.cancelScheduledValues(now);
+    old.bus.gain.setTargetAtTime(0, now, 0.3);
+    setTimeout(() => old.stop(), 1600);
+  }
+}
 let cur = null;
 let curName = '';
 let timer = null;
@@ -543,6 +604,7 @@ window.radio = {
     if (s.on) {
       if (ctx.state !== 'running') await ctx.resume();
       switchTo(station);
+      setMask(!!s.mask);
       out.gain.cancelScheduledValues(now);
       out.gain.setTargetAtTime(vol * vol * 0.9, now, 0.25); // 귀에 고르게 들리게 제곱으로
       if (!timer) timer = setInterval(tick, 200);
@@ -558,10 +620,12 @@ window.radio = {
         cur?.stop();
         cur = null;
         curName = '';
+        maskNow?.stop();
+        maskNow = null;
         ctx.suspend();
       }, 1500);
     }
-    return { on, station: curName };
+    return { on, station: curName, mask: !!maskNow };
   },
   // 점검용: 지금 소리 크기 (평균과 최대)
   level() {
@@ -573,6 +637,6 @@ window.radio = {
       sum += v * v;
       peak = Math.max(peak, Math.abs(v));
     }
-    return { rms: Math.sqrt(sum / a.length), peak, state: ctx.state, station: curName };
+    return { rms: Math.sqrt(sum / a.length), peak, state: ctx.state, station: curName, mask: !!maskNow };
   },
 };

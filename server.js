@@ -161,8 +161,8 @@ function startServer({
   isViewing, // 작업실 창이 열려 있는지 (닫혀 있으면 덜 자주 확인)
   getLoginItem,
   setLoginItem,
-  radio, // ({ on, station, volume }): 작업실 라디오 켜고 끄기, 채널과 볼륨
-  radioState, // () => { on, station, volume }
+  radio, // ({ on, station, volume, mask }): 작업실 라디오 켜고 끄기, 채널과 볼륨, 소음 가리기
+  radioState, // () => { on, station, volume, mask }
   youtube, // ('play', { list, v }) | ('show', rect) | ('hide') | ('stop'): 작업실 창 안 YouTube 미니 플레이어
   youtubeState, // () => { on, title }
   update, // ('check') | ('install'): 새 버전 확인, 업데이트
@@ -204,12 +204,13 @@ function startServer({
   };
   const withKey = (x) => ({ ...x, staffKey: staffOf(x)?.key || null, canSession: canOpenSession(x.app || '', x.agentId || x.id || '') });
   // 설정 바꾸기 (화면에서도, 상단바 메뉴에서도 쓴다)
-  // 작업실 라디오: 고른 채널과 볼륨만 남긴다
+  // 작업실 라디오: 고른 채널과 볼륨, 소음 가리기를 함께 켤지만 남긴다
   function saveRadio(r = {}) {
     const cur = settings.radio || {};
     settings.radio = {
       station: RADIO_STATIONS.has(r.station) ? r.station : RADIO_STATIONS.has(cur.station) ? cur.station : 'lofi',
       volume: Number.isFinite(r.volume) ? Math.max(0, Math.min(1, r.volume)) : Number.isFinite(cur.volume) ? cur.volume : 0.6,
+      mask: typeof r.mask === 'boolean' ? r.mask : cur.mask === true,
     };
     saveSettings();
   }
@@ -269,7 +270,7 @@ function startServer({
             sentHome: settings.sentHome,
             agentNames: settings.agentNames,
           },
-          radio: radioState?.() || { on: false, station: settings.radio?.station || 'lofi', volume: settings.radio?.volume ?? 0.6 },
+          radio: radioState?.() || { on: false, station: settings.radio?.station || 'lofi', volume: settings.radio?.volume ?? 0.6, mask: settings.radio?.mask === true },
           youtube: youtubeState?.() || { on: false, title: '' },
           update: updateState?.() || { state: 'idle' },
           agents: s.agents.map(withKey),
@@ -381,6 +382,7 @@ function startServer({
         if (typeof body.on === 'boolean') r.on = body.on;
         if (RADIO_STATIONS.has(body.station)) r.station = body.station;
         if (Number.isFinite(body.volume)) r.volume = Math.max(0, Math.min(1, body.volume));
+        if (typeof body.mask === 'boolean') r.mask = body.mask;
         saveRadio(r);
         radio?.(r);
         return json(res, 200, { ok: !!radio, radio: radioState?.() });

@@ -331,6 +331,11 @@ body.mini #card .nameIn { font-size: var(--fs-l); }
 .rvol .i { width: 18px; height: 18px; color: var(--muted); }
 .rvol input { flex: 1 1 auto; width: 100%; min-width: 80px; accent-color: var(--accent); }
 #radioPlay { min-width: 64px; }
+.rmask { gap: 10px; padding: 10px 14px; }
+.rmask .i { width: 18px; height: 18px; color: var(--icon); flex: none; }
+.rmask span { display: grid; gap: 1px; min-width: 0; }
+.rmask b { font: 600 var(--fs-s) var(--body); color: var(--ink); }
+.rmask small { color: var(--muted); font-size: var(--fs-xs); line-height: 1.35; }
 #musicBtn[aria-pressed="true"] { background: var(--accent-weak) !important; box-shadow: inset 0 0 0 2px var(--accent) !important; }
 #musicBtn .i { color: var(--icon); }
 

@@ -37,7 +37,7 @@
 
 ## 1. 설치하기
 
-1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.4.3-arm64.dmg`를 받아요.
+1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.4.4-arm64.dmg`를 받아요.
 2. DMG를 열고 **Agent Office**를 **Applications** 폴더로 끌어다 놓아요.
 3. 처음 열면 "Apple에서 확인할 수 없는 개발자" 경고가 떠요. 아직 Apple 공증을 받지 않은 앱이라서 그래요.
    - **시스템 설정 → 개인정보 보호 및 보안**으로 가서 아래쪽의 **그래도 열기**를 누르면 돼요.
@@ -50,7 +50,7 @@
 받은 파일이 릴리스에 올린 파일과 같은지 확인하고 싶다면, 아래 값을 릴리스의 `SHA256SUMS.txt`와 비교해 보세요.
 
 ```sh
-shasum -a 256 agent-office-0.4.3-arm64.dmg
+shasum -a 256 agent-office-0.4.4-arm64.dmg
 ```
 
 > Intel Mac용 파일은 아직 없어요. 필요하면 [직접 빌드하기](#직접-빌드하기)를 참고하세요.
@@ -232,6 +232,7 @@ shasum -a 256 agent-office-0.4.3-arm64.dmg
 
 1. 채널을 누르면 바로 나와요. **재생**, **멈춤** 버튼과 볼륨 막대로 조절해요.
 2. 창을 닫아도 계속 나와요. 상단바 아이콘을 오른쪽 클릭하고 **작업실 라디오**에서 채널을 고르거나 끌 수도 있어요.
+3. **소음 가리기 함께 켜기**를 켜 두면 고른 채널 밑에 고른 소음이 함께 깔려서 주변 말소리와 키보드 소리를 덮어 줘요. 채널을 바꿔도 켜진 채로 있어요. 헤드폰의 노이즈 캔슬링처럼 소리를 지우는 것은 아니고 덮는 방식이라 마이크는 쓰지 않아요.
 
 ### YouTube
 
