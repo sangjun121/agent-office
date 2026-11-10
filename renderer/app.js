@@ -10,7 +10,7 @@ import { Avatar } from '/js/avatar.js';
 import { Grid } from '/js/path.js';
 import { FX } from '/js/fx.js';
 import { canvasTex, rng, FONT_HAND, FONT_BODY } from '/js/tex.js';
-import { LOOK_PARTS, PALETTE, SKINS, HAIR_COLORS, DANCES, normalizeLook } from '/js/config.js';
+import { LOOK_PARTS, PALETTE, DANCES, normalizeLook } from '/js/config.js';
 import { $, clamp, damp, angleDamp, esc, hashStr, fmtTime } from '/js/util.js';
 import { setBrand, OFFICE_BRAND } from '/js/brand.js';
 import * as UI from '/js/ui.js';
@@ -684,19 +684,47 @@ function projectToScreen(x, y, z) {
 
 // ---------- 에이전트 ----------
 const agents = new Map();
+// 에이전트에게 자동으로 주는 모습: 동물 주민. 나는 사람이고, 에이전트는 고양이, 강아지, 곰, 토끼 같은 동물이다.
+// 종류마다 어울리는 털 색에서 고르고, 옷과 소품은 고르게 예쁜 조합만 쓴다
+// (콧물, 반창고, 멍한 표정 같은 장난스러운 선택지는 내 캐릭터 꾸미기에서만 고를 수 있다)
+const AGENT_FUR = {
+  cat: ['#F2A65A', '#B8BEC6', '#F7F1E6', '#5A5A64', '#D9C2A0'],
+  dog: ['#F7F1E6', '#E3B37E', '#8F674C', '#F2D8AE'],
+  bear: ['#9A6B4A', '#C98F5A', '#F7F1E6', '#6F5140'],
+  rabbit: ['#F7F1E6', '#F9CCD6', '#DCCFF4', '#F2E4C8'],
+  fox: ['#F0893A', '#E9A04E'],
+  hamster: ['#F7E3C0', '#EBAE72', '#F2C58B'],
+  koala: ['#A9AEB8', '#BFC4CC'],
+  pig: ['#F8BCC7', '#F7AFC0'],
+  penguin: ['#34457E', '#454A5A'],
+  duck: ['#FFD95C', '#FFF3C4'],
+};
+const AGENT_SPECIES = ['cat', 'cat', 'dog', 'dog', 'bear', 'rabbit', 'rabbit', 'fox', 'hamster', 'koala', 'pig', 'penguin', 'duck'];
+const AGENT_LOOK = {
+  hat: ['beanie', 'cap', 'phones', 'ribbon', 'sprout'],
+  face: ['smile', 'smile', 'smile', 'wink', 'calm', 'wow'],
+  glasses: ['round', 'round', 'square'],
+  top: ['tee', 'tee', 'shirt', 'shirt', 'hoodie', 'jacket'], // 티셔츠는 줄무늬, 셔츠는 체크
+  neck: ['scarf', 'bow'],
+  bag: ['none', 'none', 'none', 'backpack', 'cross'],
+  cloth: ['#F7F5F0', '#F3E3C3', '#C6B8F0', '#8E6CCF', '#F6A6C1', '#E5484D', '#FF8A3D', '#FFD15C', '#7FD8BE', '#3FA66B', '#8CCBF2', '#3D6FD8', '#28366B'],
+};
 function lookFor(id) {
   const R = rng(hashStr(id) || 7);
   const pick = (arr) => arr[Math.floor(R() * arr.length)];
   const l = {};
-  for (const [k, part] of Object.entries(LOOK_PARTS)) l[k] = pick(Object.keys(part.options));
-  l.skin = pick(SKINS)[1];
-  l.hairColor = pick(HAIR_COLORS)[1];
-  l.cloth = pick(PALETTE)[1];
+  l.species = pick(AGENT_SPECIES);
+  l.skin = pick(AGENT_FUR[l.species]);
+  l.hair = 'none';
+  l.eyes = pick(['white', 'white', 'white', 'dot', 'dot', 'lid']);
+  l.face = pick(AGENT_LOOK.face);
+  l.top = pick(AGENT_LOOK.top);
+  l.bag = pick(AGENT_LOOK.bag);
+  l.hat = R() < 0.25 ? pick(AGENT_LOOK.hat) : 'none';
+  l.glasses = R() < 0.14 ? pick(AGENT_LOOK.glasses) : 'none';
+  l.neck = R() < 0.25 ? pick(AGENT_LOOK.neck) : 'none';
+  l.cloth = pick(AGENT_LOOK.cloth);
   l.accent = pick(PALETTE)[1];
-  if (R() < 0.55 || l.hat === 'crown') l.hat = 'none'; // 왕관은 나만
-  if (R() < 0.65) l.glasses = 'none';
-  if (R() < 0.7) l.neck = 'none';
-  if (l.hair === 'none' && R() < 0.7) l.hair = 'short';
   return normalizeLook(l);
 }
 function makeAgent(d) {
@@ -2367,6 +2395,8 @@ function frame(now = performance.now()) {
   if (drawNo++ % 60 === 0 || Math.abs(cam.yaw - cam.yawT) > 0.002) renderer.shadowMap.needsUpdate = true; // 카메라를 돌리는 동안은 바로바로
   const dt = Math.min(0.05, clock.getDelta());
   t += dt;
+  // 위에서 내려다볼 때는 캐릭터가 고개를 살짝 들어서 얼굴이 보인다 (1인칭, 창문 보기에서는 그대로)
+  const HEAD_TILT = fpv.on || win.on ? 0 : -0.24;
   updateMe(dt);
   for (const a of agents.values()) {
     if (a.mode === 'walk') stepWalk(a, dt);
@@ -2382,7 +2412,7 @@ function frame(now = performance.now()) {
     a.hitT += dt;
     a.av.root.position.set(a.x, 0, a.z);
     a.av.root.rotation.y = a.h;
-    a.av.update(dt, { t, moving: a.moving, air: false, st: a.st, seat: a.seat, act: a.act, dn: 0, emote: a.emote, emoteT: a.emoteT, hitT: a.hitT });
+    a.av.update(dt, { t, moving: a.moving, air: false, st: a.st, seat: a.seat, act: a.act, dn: 0, emote: a.emote, emoteT: a.emoteT, hitT: a.hitT, tilt: HEAD_TILT });
   }
   // 축구장 공: 나와 에이전트가 움직인 만큼 밀고, 굴리고, 골을 본다
   if (room.ball) {
@@ -2413,6 +2443,7 @@ function frame(now = performance.now()) {
     kick: me.kick,
     hitT: me.hitT,
     twirl: me.twirlT < 0.45 ? 1 - (1 - me.twirlT / 0.45) ** 2 : 0,
+    tilt: HEAD_TILT,
   });
   fx.update(dt, blockedAt, hitTest);
   room.update(dt, t);
@@ -2842,7 +2873,7 @@ window.openMusicFromMain = (tab) => {
 if (!MINI && q.get('open') === 'music') setTimeout(() => window.openMusicFromMain(q.get('tab')), 500);
 
 // 점검용: 주소에 debug=1이 있을 때만 내부 상태를 꺼내 본다 (자동 점검 스크립트에서 쓴다)
-if (q.get('debug') === '1') window.__ao = { agents, me, used, room, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard, goMap, setInboxView, renderer, perf: PERF };
+if (q.get('debug') === '1') window.__ao = { agents, me, used, room, NEAR_BOSS, rank: rankOfAgent, state: () => lastState, showCard, hideCard, goMap, setInboxView, renderer, perf: PERF, lookFor };
 
 if (boot && Array.isArray(boot.agents) && boot.at) sync(boot);
 setInterval(refresh, 1000);

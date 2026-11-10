@@ -5,7 +5,7 @@ import { LOOK_PARTS, COLOR_PARTS, normalizeLook, randomLook, bamtiLook, starLook
 import { $, esc } from './util.js';
 import * as UI from './ui.js';
 
-const ORDER = ['skin', 'hair', 'hairColor', 'hat', 'face', 'glasses', 'top', 'cloth', 'neck', 'bag', 'accent'];
+const ORDER = ['species', 'skin', 'hair', 'hairColor', 'hat', 'eyes', 'face', 'glasses', 'top', 'cloth', 'neck', 'bag', 'accent'];
 
 let preview = null;
 function getPreview() {
