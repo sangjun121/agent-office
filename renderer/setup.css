@@ -252,9 +252,13 @@ body.setup.embed .sbox { height: 100vh; max-height: none; max-width: none; borde
 .mart.paris::after { content: ''; position: absolute; right: 10%; top: 4px; width: 14px; height: 30px; background: #CDBFA6; box-shadow: 0 -10px 0 -3px #56616B; }
 
 /* 처음 설정 1단계: 맵 네 개를 한 줄로 놓아서 스크롤 없이 한 화면에 들어오게 */
-.spage[data-step="1"] .maps { grid-template-columns: repeat(4, 1fr); }
+.spage[data-step="1"] .maps { grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .spage[data-step="1"] .mapc { padding: 8px; }
 .spage[data-step="1"] .mapc small { display: none; }
 .spage[data-step="1"] .mart { height: 44px; }
 .spage[data-step="1"] .flow { margin-bottom: 12px; }
 .spage[data-step="1"] .flow small { font-size: var(--fs-xs); white-space: nowrap; }
+
+/* 비행기 맵 그림: 하얀 벽과 타원 창문, 남색 통로 */
+.mart.plane { background: linear-gradient(180deg, #EEF1F5 0 42%, #2B3A7A 42% 56%, #C5CEE0 56%); }
+.mart.plane::after { content: ''; position: absolute; left: 12%; top: 5px; width: 8px; height: 11px; border-radius: 50%; background: #7CC4F2; box-shadow: 0 0 0 2px #fff, 22px 0 0 #7CC4F2, 22px 0 0 2px #fff, 44px 0 0 #7CC4F2, 44px 0 0 2px #fff, 66px 0 0 #7CC4F2, 66px 0 0 2px #fff; }

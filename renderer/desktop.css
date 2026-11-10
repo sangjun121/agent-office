@@ -380,9 +380,9 @@ body.mini #fkBar small { display: none; }
 #musicPanel .phead small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- 문 앞 맵 이동하기 ---------- */
-#doorPanel { left: calc(50% - 210px); bottom: 96px; width: 420px; }
+#doorPanel { left: calc(50% - 230px); bottom: 96px; width: 460px; }
 body.mini #doorPanel { left: 10px; right: 10px; bottom: 70px; width: auto; }
-.dmaps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 14px 14px; }
+.dmaps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 4px 14px 14px; }
 #doorPanel .mapc { display: grid; justify-items: start; gap: 2px; padding: 10px; border: 0; border-radius: var(--r-l); background: #fff; box-shadow: inset 0 0 0 1.5px var(--line); text-align: left; cursor: pointer; }
 #doorPanel .mapc:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--accent); }
 #doorPanel .mapc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -708,3 +708,27 @@ body.mini #newsPanel { top: 58px; left: 10px; right: 10px; width: auto; }
 .switch input:checked + i { background: var(--mint); }
 .switch input:checked + i::after { transform: translateX(18px); }
 .switch input:focus-visible + i { outline: 3px solid rgba(255, 138, 61, .6); outline-offset: 2px; }
+
+/* ---------- 비행기 맵 ---------- */
+#doorPanel .mart.plane { background: linear-gradient(180deg, #EEF1F5 0 42%, #2B3A7A 42% 56%, #C5CEE0 56%); }
+#doorPanel .mart.plane::after { content: ''; position: absolute; left: 12%; top: 5px; width: 8px; height: 11px; border-radius: 50%; background: #7CC4F2; box-shadow: 0 0 0 2px #fff, 22px 0 0 #7CC4F2, 22px 0 0 2px #fff, 44px 0 0 #7CC4F2, 44px 0 0 2px #fff, 66px 0 0 #7CC4F2, 66px 0 0 2px #fff; }
+/* 창문 보기 버튼: 창가 자리에 앉으면 행동 버튼 옆에 뜬다 */
+#winBtn { position: fixed; z-index: 6; left: calc(50% + 92px); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; box-shadow: var(--shadow); cursor: pointer; }
+#winBtn .i { color: var(--s-work); }
+#winBtn kbd, #winBack kbd { margin: 0 0 0 2px; }
+body.mini #winBtn { left: auto; right: 10px; top: 256px; bottom: auto; padding: 5px 10px; font-size: var(--fs-s); }
+body.mini:not(.ishut) #winBtn { display: none !important; }
+/* 창문 보기: 타원 창틀 바깥은 기내 벽으로 덮고, 구멍으로 3D 창밖이 보인다 */
+#winView { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; overflow: hidden; }
+.wframe {
+  position: relative; width: min(64vh, 46vw); aspect-ratio: 3 / 4; border-radius: 46% / 38%; overflow: hidden;
+  /* 앞에 적은 그림자가 위에 온다: 안쪽 테두리부터 바깥 벽 순서로 */
+  box-shadow: 0 0 0 14px #F7F8FA, 0 0 0 20px #C9CED6, 0 0 0 46px #F1F3F6, 0 0 0 48px #D5DAE2, 0 0 0 200vmax #E9ECF1, inset 0 0 0 5px #AEB5C1, inset 0 10px 34px rgba(20, 30, 60, .38);
+}
+.wframe::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 10%; background: linear-gradient(180deg, #F7F8FA 70%, #DDE1E8); box-shadow: 0 2px 6px rgba(20, 30, 60, .25); }
+#winBack { position: absolute; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; box-shadow: var(--shadow); cursor: pointer; }
+body.winv #labels { visibility: hidden; }
+body.mini #winView { inset: 0 0 auto 0; height: 396px; }
+body.mini:not(.ishut) #winView { height: 188px; }
+body.mini .wframe { width: auto; height: 78%; }
+body.mini #winBack { bottom: 8px; padding: 4px 10px; font-size: var(--fs-s); }

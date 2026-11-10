@@ -6,6 +6,7 @@ import { Avatar } from './avatar.js';
 const SIZE = 112; // 찍는 크기 (화면에서는 28~40px로 줄여 쓴다)
 let kit = null;
 const cache = new Map(); // 모습 → 그림 주소 (blob:)
+const MAX = 150; // 이보다 많아지면 오래된 그림부터 버린다 (오래 켜 둬도 메모리가 늘지 않게)
 const _p = new THREE.Vector3();
 
 function getKit() {
@@ -54,5 +55,10 @@ export function faceURL(look) {
     url = '';
   }
   cache.set(key, url);
+  if (cache.size > MAX) {
+    const [old, oldUrl] = cache.entries().next().value;
+    cache.delete(old);
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+  }
   return url;
 }

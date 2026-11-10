@@ -53,6 +53,7 @@
   <symbol id="i-think" viewBox="0 0 20 20"><path d="M4.6 3.2h10.8a2.2 2.2 0 0 1 2.2 2.2v6.6a2.2 2.2 0 0 1-2.2 2.2H9.4l-3.6 3v-3H4.6a2.2 2.2 0 0 1-2.2-2.2V5.4a2.2 2.2 0 0 1 2.2-2.2z" fill="currentColor" fill-opacity=".16"/><path d="M6.8 8.7h.1M10 8.7h.1M13.2 8.7h.1" stroke-width="2.2"/></symbol>
   <symbol id="i-report" viewBox="0 0 20 20"><path d="M7.2 2.8h5.6a5 5 0 0 1 5 5v1.6a5 5 0 0 1-5 5H7.8l-3 2.8v-3.2a5 5 0 0 1-2.6-4.4V7.8a5 5 0 0 1 5-5z" fill="currentColor" fill-opacity=".16"/><path d="M6.8 8.6l2.2 2.2 4.2-4.3"/></symbol>
   <symbol id="i-trophy" viewBox="0 0 20 20"><path d="M6.2 3.4h7.6v4.2a3.8 3.8 0 0 1-7.6 0z" fill="currentColor" fill-opacity=".16"/><path d="M6.2 4.8H3.6v1a2.6 2.6 0 0 0 2.6 2.6M13.8 4.8h2.6v1a2.6 2.6 0 0 1-2.6 2.6M10 11.4v3M6.8 16.6h6.4"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 20 20"><path d="M17.2 2.8a1.5 1.5 0 0 0-2.1 0l-3 3-7.3-1.9-1.4 1.4 5.9 3.3-2.6 2.6-2.3-.4-1.1 1.1 3 1.6 1.6 3 1.1-1.1-.4-2.3 2.6-2.6 3.3 5.9 1.4-1.4-1.9-7.3 3-3a1.5 1.5 0 0 0 0-2.1z" fill="currentColor" fill-opacity=".16"/></symbol>
   <symbol id="i-folder" viewBox="0 0 20 20"><path d="M2.6 5.6a1.6 1.6 0 0 1 1.6-1.6h3.6l1.8 2h6.2a1.6 1.6 0 0 1 1.6 1.6v6.8a1.6 1.6 0 0 1-1.6 1.6H4.2a1.6 1.6 0 0 1-1.6-1.6z" fill="currentColor" fill-opacity=".16"/></symbol>
 </svg>
 
@@ -89,6 +90,7 @@
 </div>
 <div id="hint"><kbd>←↑↓→</kbd> 걷기 · <kbd>F</kbd> 앉기 · <kbd>V</kbd> 1인칭 · 캐릭터를 누르면 지금 하는 일</div>
 <button id="act" class="btn" type="button" hidden><span></span><kbd>F</kbd></button>
+<button id="winBtn" class="chip" type="button" hidden title="이 자리 창으로 밖을 내다봐요"><svg class="i" aria-hidden="true"><use href="#i-plane"/></svg>창문 보기<kbd>E</kbd></button>
 <div class="hud" id="dock">
   <button type="button" class="chip" id="skillBtn" aria-expanded="false" title="내 캐릭터 동작과 조작법"><svg class="i" aria-hidden="true"><use href="#i-spark"/></svg><span class="w">동작</span></button>
 </div>
@@ -173,6 +175,7 @@
     <button type="button" class="rst" data-st="piano" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-piano"/></svg><span><b>피아노</b><small>잔잔한 피아노</small></span></button>
     <button type="button" class="rst" data-st="rain" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-rain"/></svg><span><b>빗소리</b><small>창밖에 내리는 비</small></span></button>
     <button type="button" class="rst" data-st="focus" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-wave"/></svg><span><b>집중 소음</b><small>낮고 부드러운 소음</small></span></button>
+    <button type="button" class="rst" data-st="cabin" aria-pressed="false"><svg class="i" aria-hidden="true"><use href="#i-plane"/></svg><span><b>비행기 안</b><small>엔진 소리와 띵동</small></span></button>
   </div>
   <div class="pfoot"><button type="button" class="btn sm" id="radioPlay">재생</button><label class="rvol" title="볼륨"><svg class="i" aria-hidden="true"><use href="#i-volume"/></svg><input type="range" id="radioVol" min="0" max="100" step="1" aria-label="볼륨"></label></div>
   </div>
@@ -211,7 +214,13 @@
     <button type="button" class="mapc" data-map="cafe"><span class="mart cafe"><i></i><i></i><i></i></span><b>카페</b><small>창가 자리와 원형 테이블</small></button>
     <button type="button" class="mapc" data-map="stadium"><span class="mart stadium"><i></i><i></i><i></i></span><b>축구장</b><small>하얀 관중석과 전광판</small></button>
     <button type="button" class="mapc" data-map="paris"><span class="mart paris"><i></i><i></i><i></i></span><b>파리</b><small>카페 테라스와 성당</small></button>
+    <button type="button" class="mapc" data-map="airplane"><span class="mart plane"><i></i><i></i><i></i></span><b>비행기</b><small>일등석과 창밖 구름</small></button>
   </div>
+</div>
+<!-- 창문 보기 (비행기 맵): 타원 창틀 사이로 3D 창밖 풍경이 보인다 -->
+<div id="winView" hidden>
+  <div class="wframe" aria-hidden="true"></div>
+  <button type="button" class="chip" id="winBack">돌아가기<kbd>Esc</kbd></button>
 </div>
 <div id="mapFade" hidden></div>
 

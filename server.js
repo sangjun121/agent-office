@@ -31,9 +31,9 @@ const DEFAULTS = {
 };
 // 업데이트 안내: 쓰던 사람에게 새 버전에서 바뀐 것을 한 번만 알려 준다. 안내할 내용이 바뀌면 이 값을 바꾼다
 const NEWS_ID = 'tag-detail';
-const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris']);
+const MAPS_OK = new Set(['office', 'cafe', 'stadium', 'paris', 'airplane']);
 
-const RADIO_STATIONS = new Set(['lofi', 'piano', 'rain', 'focus']);
+const RADIO_STATIONS = new Set(['lofi', 'piano', 'rain', 'focus', 'cabin']);
 
 // YouTube 주소에서 재생목록(list)과 영상(v) 아이디만 꺼낸다. 다른 주소는 받지 않는다.
 const YT_V = /^[A-Za-z0-9_-]{11}$/;

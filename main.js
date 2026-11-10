@@ -83,6 +83,7 @@ function showMenu() {
           ['cafe', '카페'],
           ['stadium', '축구장'],
           ['paris', '파리'],
+          ['airplane', '비행기'],
         ].map(([id, label]) => ({ label, type: 'radio', checked: srv?.getSettings().map === id, click: () => srv?.setSettings({ map: id }) })),
       },
       {
@@ -117,6 +118,17 @@ function setUnread(n) {
   tray?.setToolTip(n > 0 ? `에이전트 작업실 · 안 읽은 보고 ${n}개` : '에이전트 작업실 · 오른쪽 클릭하면 메뉴');
 }
 
+// 숨긴 창은 그리지 않게 화면에 알려 준다.
+// 작은 창은 숨겨도 브라우저가 그리기를 멈추지 않아서, 보이지 않는 동안에도 CPU와 GPU를 계속 쓰고 있었다
+function setPaused(w, on) {
+  if (w && !w.isDestroyed()) w.webContents.executeJavaScript(`window.__aoPaused = ${!!on}`).catch(() => {});
+}
+function pauseWhenHidden(w) {
+  const sync = () => setPaused(w, !w.isVisible() || w.isMinimized());
+  for (const ev of ['show', 'hide', 'minimize', 'restore']) w.on(ev, sync);
+  w.webContents.on('did-finish-load', sync); // 맵을 바꿔 화면을 새로 띄운 뒤에도
+}
+
 // ---------- 펼치는 창 ----------
 function createPopover() {
   const s = srv?.getSettings() || {};
@@ -139,6 +151,7 @@ function createPopover() {
   });
   pop.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   openLinksOutside(pop);
+  pauseWhenHidden(pop);
   pop.on('blur', () => {
     if (popPinned || pop.webContents.isDevToolsOpened()) return;
     pop.hide();
@@ -259,6 +272,7 @@ const STATIONS = [
   ['piano', '피아노'],
   ['rain', '빗소리'],
   ['focus', '집중 소음'],
+  ['cabin', '비행기 안'],
 ];
 let radioWin = null;
 const radio = { on: false, station: 'lofi', volume: 0.6 };
@@ -560,6 +574,7 @@ function showWindow(opts) {
     webPreferences,
   });
   openLinksOutside(win);
+  pauseWhenHidden(win);
   win.once('ready-to-show', () => win.show());
   win.on('close', () => ytHide()); // 창을 닫아도 YouTube는 계속 (상단바 메뉴에서 끈다)
   win.on('closed', () => {

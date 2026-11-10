@@ -99,7 +99,6 @@ kbd {
   background: rgba(22, 32, 30, .72);
   color: #fff;
   font: 700 var(--fs-s)/1.5 var(--body);
-  backdrop-filter: blur(2px);
 }
 .tag.me { background: var(--accent); }
 .tag .ico:empty { display: none; }

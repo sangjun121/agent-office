@@ -522,6 +522,19 @@ async function stills(srv) {
     await key('KeyV');
     await sleep(800);
   }
+  // 비행기 맵과 창문 보기 (내 일등석 창으로 내다본 모습)
+  await inApp("__ao.goMap('airplane')");
+  await sleep(1500);
+  await until(() => inApp("!!(window.__ao && __ao.agents.size >= 7 && document.getElementById('loading').classList.contains('done'))"), 20000);
+  await sleep(2500);
+  await inApp("document.getElementById('inboxHide').click()");
+  await sleep(600);
+  await still('airplane.jpg', CROP);
+  await key('KeyE');
+  await sleep(1400);
+  await still('airplane-window.jpg', CROP);
+  await key('Escape');
+  await sleep(500);
   // 12) 처음 설정: 시작, 앱 연결 (600x720 창을 2배로)
   const sw = new BrowserWindow({ width: 1200, height: 1440, show: false, webPreferences: { offscreen: true, backgroundThrottling: false } });
   await sw.loadURL(`${srv.setupUrl}&step=2`);

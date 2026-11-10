@@ -910,6 +910,15 @@ export class Avatar {
 
   dispose() {
     this.root.parent?.remove(this.root);
+    // 이 캐릭터만 쓰던 도형과 재료를 모두 내놓는다 (컵, 책, 노트북 같은 소품까지).
+    // 여럿이 같이 쓰는 몸통 도형(G), 그림자, 색 재료(M)는 남긴다. 안 그러면 에이전트가 드나들 때마다 그래픽 메모리가 조금씩 샌다
+    const sharedGeo = new Set([...Object.values(G), BLOB_GEO]);
+    const sharedMat = new Set([...mats.values(), HIT_MAT, BLOB_MAT]);
+    this.root.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.geometry && !sharedGeo.has(o.geometry)) o.geometry.dispose();
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && !sharedMat.has(m)) m.dispose();
+    });
     for (const g of this.decoGeos) g.dispose();
     this.faceTex.dispose();
     this.faceMesh.material.dispose();

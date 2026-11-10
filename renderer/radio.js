@@ -1,6 +1,6 @@
 // 작업실 라디오: 인터넷 없이 Web Audio로 그 자리에서 만드는 음악 (음악 파일이 없어서 저작권 걱정도 없다)
 // main.js가 숨은 창에서 이 페이지를 띄우고 window.radio.set({ on, station, volume })로 조절한다.
-// 채널: lofi(로파이), piano(피아노), rain(빗소리), focus(집중 소음)
+// 채널: lofi(로파이), piano(피아노), rain(빗소리), focus(집중 소음), cabin(비행기 안)
 const ctx = new AudioContext({ latencyHint: 'playback' });
 const out = ctx.createGain();
 out.gain.value = 0;
@@ -413,7 +413,106 @@ function focus() {
   };
 }
 
-const STATIONS = { lofi, piano: pianoStation, rain, focus };
+// 비행기 안: 낮게 깔리는 엔진 소리와 환기구 바람 소리 위로, 가끔 기내 방송 전의 '띵동'이 울린다
+// 띵동은 종소리처럼 배음을 겹친 두 음(높은 음 → 낮은 음)이고, 기내 스피커처럼 살짝 좁게 걸러서 낸다
+function cabin() {
+  const bus = makeBus();
+  // 엔진과 동체가 울리는 낮은 소리
+  const low = ctx.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 340;
+  low.Q.value = 0.4;
+  low.connect(bus);
+  const rumble = loop(BROWN, low, 0.95);
+  // 기내를 채우는 바람 소리 (중간 음역)
+  const mid = ctx.createBiquadFilter();
+  mid.type = 'bandpass';
+  mid.frequency.value = 720;
+  mid.Q.value = 0.35;
+  mid.connect(bus);
+  const air = loop(PINK, mid, 0.34);
+  // 머리 위 환기구의 '쉬이' 소리
+  const vent = ctx.createBiquadFilter();
+  vent.type = 'highpass';
+  vent.frequency.value = 2600;
+  const ventLp = ctx.createBiquadFilter();
+  ventLp.type = 'lowpass';
+  ventLp.frequency.value = 6500;
+  vent.connect(ventLp).connect(bus);
+  const hiss = loop(PINK, vent, 0.075);
+  // 엔진 회전음: 조금 어긋난 두 음이 천천히 울렁인다
+  const hum = ctx.createGain();
+  hum.gain.value = 0.05;
+  const humLp = ctx.createBiquadFilter();
+  humLp.type = 'lowpass';
+  humLp.frequency.value = 260;
+  hum.connect(humLp).connect(bus);
+  const oscs = [[86, 'sine', 1], [86.7, 'sine', 0.8], [129.4, 'triangle', 0.35], [172.6, 'sine', 0.18]].map(([f, type, a]) => {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.value = a;
+    o.connect(g).connect(hum);
+    o.start();
+    return o;
+  });
+  // 소리 세기가 아주 천천히 달라진다 (구름을 지날 때처럼)
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 0.045;
+  const lfoG = ctx.createGain();
+  lfoG.gain.value = 0.09;
+  lfo.connect(lfoG).connect(rumble.gain.gain);
+  lfo.start();
+  // 기내 스피커: 좁게 걸러서 잔향을 조금
+  const pa = ctx.createBiquadFilter();
+  pa.type = 'bandpass';
+  pa.frequency.value = 1500;
+  pa.Q.value = 0.45;
+  pa.connect(bus);
+  const paSend = ctx.createGain();
+  paSend.gain.value = 0.16;
+  pa.connect(paSend).connect(verb);
+  function ding(f, t, vel) {
+    const g = ctx.createGain();
+    env(g, t, vel, 0.004, vel * 0.42, 0.22, t + 2.4);
+    for (const [k, a] of [[1, 1], [2, 0.34], [3.01, 0.13], [4.16, 0.07], [5.43, 0.03]]) {
+      const o = ctx.createOscillator();
+      o.frequency.value = f * k;
+      const pg = ctx.createGain();
+      pg.gain.setValueAtTime(a, t);
+      pg.gain.exponentialRampToValueAtTime(a * (k > 1 ? 0.08 : 0.6), t + 1.2); // 높은 배음이 먼저 사라진다
+      o.connect(pg).connect(g);
+      o.start(t);
+      o.stop(t + 2.5);
+    }
+    g.connect(pa);
+  }
+  let chimeAt = ctx.currentTime + 1.6; // 틀면 곧 한 번 울리고, 그 뒤로는 가끔
+  return {
+    bus,
+    stop() {
+      for (const s of [rumble.src, air.src, hiss.src, lfo, ...oscs]) {
+        try {
+          s.stop();
+        } catch {}
+      }
+      setTimeout(() => bus.disconnect(), 200);
+    },
+    schedule(until) {
+      while (chimeAt < until) {
+        const t = chimeAt;
+        if (R() < 0.75) {
+          ding(659.26, t, 0.2); // 띵 (미)
+          ding(523.25, t + 0.62, 0.2); // 동 (도)
+        } else ding(587.33, t, 0.18); // 좌석 벨트 표시등: 한 번만
+        chimeAt += 50 + R() * 70;
+      }
+    },
+  };
+}
+
+const STATIONS = { lofi, piano: pianoStation, rain, focus, cabin };
 let cur = null;
 let curName = '';
 let timer = null;

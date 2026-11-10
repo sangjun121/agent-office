@@ -37,7 +37,7 @@
 
 ## 1. 설치하기
 
-1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.4.0-arm64.dmg`를 받아요.
+1. [Releases](https://github.com/sangjun121/agent-office/releases/latest)에서 `agent-office-0.4.1-arm64.dmg`를 받아요.
 2. DMG를 열고 **Agent Office**를 **Applications** 폴더로 끌어다 놓아요.
 3. 처음 열면 "Apple에서 확인할 수 없는 개발자" 경고가 떠요. 아직 Apple 공증을 받지 않은 앱이라서 그래요.
    - **시스템 설정 → 개인정보 보호 및 보안**으로 가서 아래쪽의 **그래도 열기**를 누르면 돼요.
@@ -50,7 +50,7 @@
 받은 파일이 릴리스에 올린 파일과 같은지 확인하고 싶다면, 아래 값을 릴리스의 `SHA256SUMS.txt`와 비교해 보세요.
 
 ```sh
-shasum -a 256 agent-office-0.4.0-arm64.dmg
+shasum -a 256 agent-office-0.4.1-arm64.dmg
 ```
 
 > Intel Mac용 파일은 아직 없어요. 필요하면 [직접 빌드하기](#직접-빌드하기)를 참고하세요.
@@ -174,6 +174,7 @@ shasum -a 256 agent-office-0.4.0-arm64.dmg
 | Space | 점프 (공중에서 한 번 더) |
 | F, Enter | 앉기, 일어나기, 가까운 캐릭터 보기, 문 앞에서 맵 이동하기, 공 차기 (축구장, Shift를 누른 채 차면 더 세게) |
 | V | 1인칭으로 보기 |
+| E | 창문 보기 (비행기 창가 자리에 앉아서) |
 | K | 프리킥 (축구장): ←→로 방향, F를 누르고 있다 떼면 슛, Shift를 누른 채 떼면 감아 차기 |
 | 1 / 2 / 3 | 인사 / 하트 / 춤 |
 | C | 폭죽 |
@@ -183,7 +184,7 @@ shasum -a 256 agent-office-0.4.0-arm64.dmg
 
 ## 9. 맵과 내 캐릭터
 
-맵은 네 가지예요. 위쪽 막대의 맵 버튼이나 상단바 메뉴에서 바꾸거나, 문 앞에서 F를 눌러 옮겨 갈 수 있어요.
+맵은 다섯 가지예요. 위쪽 막대의 맵 버튼이나 상단바 메뉴에서 바꾸거나, 문 앞에서 F를 눌러 옮겨 갈 수 있어요.
 
 <table>
   <tr>
@@ -193,6 +194,13 @@ shasum -a 256 agent-office-0.4.0-arm64.dmg
   <tr>
     <td valign="top"><img src="docs/cafe.jpg" alt="카페 맵"><br><b>카페</b><br>창가 바, 큰 테이블, 소파 라운지가 있는 카페예요.</td>
     <td valign="top"><img src="docs/paris-eye.jpg" alt="파리 맵을 1인칭으로 본 모습"><br><b>1인칭으로 보면</b><br>어느 맵에서든 V를 누르면 그 자리에 서 있는 것처럼 둘러볼 수 있어요.</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/airplane.jpg" alt="비행기 맵"><br><b>비행기</b><br>하얀 벽에 타원 창문이 줄지어 있는 기내예요. 나는 일등석 창가에 앉고, 에이전트는 일반석 접이식 테이블에서 일해요. 쉬는 에이전트도 일반석 자기 자리에 앉아서 쉬어요. 오늘의 작업 현황은 앞 칸막이의 화면에 뜨고, 밖에는 구름이 뒤로 흘러가요.</td>
+    <td width="50%" valign="top"><img src="docs/airplane-window.jpg" alt="비행기 창문으로 내다본 모습"><br><b>창문 보기</b><br>창가 자리에 앉아 <b>창문 보기</b>를 누르거나 E를 누르면 그 창으로 밖을 내다봐요. 날개와 엔진, 흘러가는 구름이 보이고, 하늘색은 지금 시각에 따라 바뀌어요. Esc를 누르거나 움직이면 돌아와요.</td>
   </tr>
 </table>
 
@@ -218,6 +226,7 @@ shasum -a 256 agent-office-0.4.0-arm64.dmg
 | 피아노 | 잔잔하게 펼쳐 치는 피아노 |
 | 빗소리 | 창밖에 내리는 비 |
 | 집중 소음 | 낮고 부드러운 소음 |
+| 비행기 안 | 낮게 깔리는 엔진 소리와 바람 소리, 가끔 울리는 띵동 |
 
 1. 채널을 누르면 바로 나와요. **재생**, **멈춤** 버튼과 볼륨 막대로 조절해요.
 2. 창을 닫아도 계속 나와요. 상단바 아이콘을 오른쪽 클릭하고 **작업실 라디오**에서 채널을 고르거나 끌 수도 있어요.
@@ -341,7 +350,7 @@ sources.js   Claude Code, Codex 세션 기록 읽기
 staff.js     충성도와 직급
 appicons.js  이 Mac에 깔린 Orca, Claude, Codex 아이콘 읽기
 renderer/    앱 화면 (3D 작업실, 처음 설정, 라디오 음악)
-shared/      맵(작업실, 카페, 축구장, 파리)과 캐릭터 (three.js)
+shared/      맵(작업실, 카페, 축구장, 파리, 비행기)과 캐릭터 (three.js)
 scripts/     아이콘, README 그림, 홍보 영상, 빌드 도우미, 업데이트 서명
 ```
 
